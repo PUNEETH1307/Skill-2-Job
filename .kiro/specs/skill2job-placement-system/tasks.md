@@ -1,0 +1,404 @@
+# Implementation Plan: Skill2Job Placement System
+
+## Overview
+
+This plan implements the Skill2Job campus placement system incrementally: project setup and configuration first, then database models, backend services (auth, skill analysis, job matching, resume generation, analytics), REST API endpoints, and finally the React frontend. Each task builds on previous work so there is no orphaned code. Property-based tests validate correctness properties from the design, and unit tests cover specific behaviors.
+
+## Tasks
+
+- [x] 1. Project setup and configuration
+  - [x] 1.1 Initialize backend project structure
+    - Create the Flask application directory layout: `backend/app/__init__.py`, `backend/app/models/`, `backend/app/services/`, `backend/app/routes/`, `backend/app/utils/`, `backend/config.py`, `backend/requirements.txt`, `backend/run.py`
+    - Set up `requirements.txt` with pinned versions: Flask, Flask-SQLAlchemy, Flask-Migrate, PyMySQL, flask-cors, PyJWT, bcrypt, spacy, scikit-learn, numpy, reportlab, marshmallow, hypothesis, pytest
+    - Create `config.py` with development/testing/production configurations (DB URI, JWT secret, token expiry, SpaCy model name)
+    - Create Flask app factory in `__init__.py` that initializes extensions (SQLAlchemy, Migrate, CORS)
+    - _Requirements: 14.1, 15.1_
+  - [x] 1.2 Initialize frontend project structure
+    - Create React app in `frontend/` using Create React App or Vite with TypeScript template
+    - Install dependencies: axios, react-router-dom, jwt-decode, chart.js (or recharts for analytics)
+    - Set up project structure: `frontend/src/components/`, `frontend/src/pages/`, `frontend/src/services/`, `frontend/src/context/`, `frontend/src/utils/`
+    - Configure axios base URL and JWT interceptor for automatic token attachment and 401 redirect
+    - _Requirements: 2.1, 2.6_
+  - [x] 1.3 Set up testing infrastructure
+    - Configure pytest with `backend/pytest.ini` or `pyproject.toml` (test paths, markers for unit/property/integration)
+    - Create `backend/tests/` directory with `unit/`, `property/`, `integration/` subdirectories and `conftest.py` with test database fixtures
+    - Install and configure Hypothesis for property-based testing
+    - Create shared test fixtures: test Flask app, test database session, sample student profile factory, sample job role factory
+    - _Requirements: 17.1, 17.2, 17.3, 17.4, 18.1, 18.2_
+
+- [x] 2. Database models and migrations
+  - [x] 2.1 Create SQLAlchemy models for all entities
+    - Implement `User` model with fields: id, name, email (unique), phone, password_hash, role (enum: student/placement_officer/admin), status (active/inactive), created_at, updated_at
+    - Implement `StudentProfile` model with fields: id, user_id (FK), institution, degree, branch, cgpa, graduation_year, skills_json, skill_vector_json, updated_at
+    - Implement `Project` model with fields: id, profile_id (FK), title, description, technologies
+    - Implement `Certification` model with fields: id, profile_id (FK), name, issuer, issue_date
+    - Implement `Company` model with fields: id, name, industry, location, contact_email, contact_phone, created_at
+    - Implement `JobRole` model with fields: id, company_id (FK), title, description, required_skills_json, job_vector_json, cgpa_threshold, academic_status, is_active, created_at
+    - Implement `Shortlist` model with fields: id, profile_id (FK), job_role_id (FK), compatibility_score, status, shortlisted_at
+    - Implement `SkillTaxonomy` model with fields: id, canonical_name (unique), category, synonyms_json, is_deprecated
+    - Implement `UncategorizedSkill` model with fields: id, term, occurrence_count, reviewed, flagged_at
+    - Implement `CourseRecommendation` model with fields: id, skill_name, course_name, provider, url, created_at
+    - Implement `PlacementRecord` model with fields: id, profile_id (FK), job_role_id (FK), company_id (FK), placement_date, department
+    - Add all database indexes from the design: idx_user_email, idx_profile_user_id, idx_job_company_id, idx_job_active, idx_skill_canonical, idx_shortlist_job, idx_placement_date, idx_placement_dept
+    - _Requirements: 1.1, 1.5, 3.1, 3.2, 3.3, 9.1, 9.2, 10.5, 11.1, 13.1, 15.4_
+  - [x] 2.2 Create database migration and seed data
+    - Initialize Flask-Migrate and generate the initial migration from the models
+    - Create a seed script that populates the skill taxonomy with initial skills (Programming Languages, Frameworks, Databases, Tools, Soft Skills, Domain Knowledge categories) and synonym mappings
+    - Seed a default admin account (hashed password)
+    - _Requirements: 5.2, 13.1, 13.2_
+  - [ ]* 2.3 Write property tests for profile data serialization round-trip
+    - **Property 20: Profile Serialization Round-Trip** — For any valid Student profile object, serializing to JSON and deserializing back SHALL produce an equivalent object with no data loss
+    - **Validates: Requirements 18.1**
+  - [ ]* 2.4 Write property test for skill vector serialization round-trip
+    - **Property 17: Skill Vector Serialization Round-Trip** — For any valid Skill_Vector or Job_Requirement_Vector, serializing to JSON and deserializing back SHALL produce a numerically equivalent vector
+    - **Validates: Requirements 17.1, 17.2**
+
+- [x] 3. Checkpoint - Verify project setup and database
+  - Ensure all tests pass, ask the user if questions arise.
+  - Run migrations against a test database to verify schema creation
+  - Confirm seed data loads correctly
+
+- [x] 4. Auth Module — registration, login, session management
+  - [x] 4.1 Implement AuthModule service
+    - Create `backend/app/services/auth_service.py` with the `AuthModule` class
+    - Implement `register()`: validate inputs (email format, password >= 8 chars, required fields), check for duplicate email, hash password with bcrypt (unique salt), create User record, return user_id and confirmation
+    - Implement `login()`: look up user by email, verify password hash, check account status (reject inactive), generate JWT token with user_id, role, and 30-minute expiry
+    - Implement `logout()`: add token to a blacklist (in-memory set or database table)
+    - Implement `validate_token()`: decode JWT, check expiry, check blacklist, return user info with role
+    - Implement `check_permission()`: compare token role against required role hierarchy
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6_
+  - [x] 4.2 Create auth middleware decorator
+    - Create `backend/app/utils/auth_decorator.py` with `@jwt_required` and `@role_required(role)` decorators
+    - `@jwt_required`: extract token from Authorization header, validate via AuthModule, attach user info to Flask `g` object, return 401 on failure
+    - `@role_required(role)`: check user role from `g` object against required role, return 403 on insufficient permissions
+    - _Requirements: 2.3, 2.6, 16.2_
+  - [x] 4.3 Create auth API routes
+    - Create `backend/app/routes/auth_routes.py` with Blueprint
+    - `POST /api/auth/register` — accept name, email, phone, password; validate with marshmallow schema; call AuthModule.register(); return 201 or error
+    - `POST /api/auth/login` — accept email, password; call AuthModule.login(); return JWT token or generic 401 error
+    - `POST /api/auth/logout` — require JWT; call AuthModule.logout(); return 200
+    - Register blueprint in app factory
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.5_
+  - [ ]* 4.4 Write property tests for auth validation
+    - **Property 1: Input Validation Rejects Invalid Data** — For any registration with invalid email, short password, or missing fields, the system SHALL reject and identify the invalid fields
+    - **Validates: Requirements 1.3, 1.4, 14.1**
+  - [ ]* 4.5 Write property test for password storage security
+    - **Property 2: Password Storage Security** — For any password, the stored hash SHALL NOT equal the plaintext, and two accounts with the same password SHALL have different hashes
+    - **Validates: Requirements 1.5**
+  - [ ]* 4.6 Write property test for duplicate email rejection
+    - **Property 3: Duplicate Email Rejection** — For any existing email, re-registration SHALL be rejected
+    - **Validates: Requirements 1.2**
+  - [ ]* 4.7 Write property tests for role-based access control
+    - **Property 4: Role-Based Access Control Enforcement** — For any user role and endpoint, access SHALL be granted only if the endpoint is permitted for that role
+    - **Validates: Requirements 2.3, 16.2**
+  - [ ]* 4.8 Write property test for invalid token rejection
+    - **Property 5: Invalid Token Rejection** — For any expired, malformed, or invalid token, API requests SHALL return 401
+    - **Validates: Requirements 2.6**
+
+- [x] 5. Student Profile service and API
+  - [x] 5.1 Implement StudentProfile service
+    - Create `backend/app/services/profile_service.py`
+    - Implement `get_profile(user_id)`: fetch StudentProfile with related Projects and Certifications
+    - Implement `create_or_update_profile(user_id, data)`: validate required fields (name, institution, degree, branch, CGPA in [0.0, 10.0]), upsert StudentProfile, handle nested Project and Certification entries
+    - Implement `add_project(profile_id, data)`: create Project linked to profile
+    - Implement `add_certification(profile_id, data)`: create Certification linked to profile
+    - After profile save/update, trigger skill analysis asynchronously (call SkillAnalyzer)
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 5.1_
+  - [x] 5.2 Create profile API routes
+    - Create `backend/app/routes/profile_routes.py` with Blueprint
+    - `GET /api/profile` — @jwt_required, @role_required('student'); fetch and return profile with projects, certifications, and skill analysis
+    - `PUT /api/profile` — @jwt_required, @role_required('student'); validate input with marshmallow schema; call profile_service.create_or_update_profile(); return updated profile
+    - Register blueprint in app factory
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6_
+  - [ ]* 5.3 Write property test for profile data persistence round-trip
+    - **Property 6: Profile Data Persistence Round-Trip** — For any valid profile data, saving and retrieving SHALL produce equivalent data
+    - **Validates: Requirements 3.1, 3.2, 3.3, 3.4**
+  - [ ]* 5.4 Write property test for input validation
+    - **Property 1 (profile scope): Input Validation Rejects Invalid Data** — For any profile with CGPA outside [0.0, 10.0] or missing required fields, submission SHALL be rejected with specific field errors
+    - **Validates: Requirements 3.5, 3.6, 14.1**
+
+- [ ] 6. Skill Analyzer service
+  - [x] 6.1 Implement SkillAnalyzer service
+    - Create `backend/app/services/skill_analyzer.py` with the `SkillAnalyzer` class
+    - Load SpaCy `en_core_web_sm` model at module level
+    - Implement `extract_skills(profile_text)`: use SpaCy NLP to tokenize and extract skill terms from skills list and project descriptions; match against skill taxonomy
+    - Implement `normalize_skill(skill_term)`: look up synonym mappings in SkillTaxonomy table; return canonical name or original term if no match
+    - Implement `categorize_skills(skills)`: group normalized skills by their taxonomy category (Programming Languages, Frameworks, Databases, Tools, Soft Skills, Domain Knowledge)
+    - Implement `generate_skill_vector(skills)`: build a binary/TF-IDF vector over the full skill taxonomy vocabulary; dimension = taxonomy size; return numpy array
+    - Implement `generate_job_requirement_vector(required_skills)`: same vector generation for job role skill lists
+    - Implement `flag_unknown_skill(skill_term)`: insert or increment occurrence_count in UncategorizedSkill table
+    - Store skill_vector_json on StudentProfile after analysis
+    - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
+  - [x] 6.2 Create skill analysis API route
+    - Add to profile routes or create `backend/app/routes/skill_routes.py`
+    - `GET /api/skills/analysis` — @jwt_required, @role_required('student'); return categorized skill breakdown for the logged-in student
+    - _Requirements: 5.6_
+  - [ ]* 6.3 Write property test for skill normalization consistency
+    - **Property 9: Skill Normalization Consistency** — For any synonym in the taxonomy, normalization SHALL produce the same canonical name as the base term
+    - **Validates: Requirements 5.5, 13.2**
+  - [ ]* 6.4 Write property test for skill vector dimensionality
+    - **Property 10: Skill Vector Dimensionality and Categorization** — For any valid skill list, the vector SHALL have dimension equal to taxonomy size, and each skill SHALL be in exactly one category
+    - **Validates: Requirements 5.2, 5.3**
+  - [ ]* 6.5 Write property test for unknown skill flagging
+    - **Property 11: Unknown Skills Are Flagged** — For any skill term not in the taxonomy, it SHALL be flagged as uncategorized
+    - **Validates: Requirements 5.4**
+
+- [ ] 7. Job Matching Engine service
+  - [x] 7.1 Implement JobMatchingEngine service
+    - Create `backend/app/services/job_matching.py` with the `JobMatchingEngine` class
+    - Implement `compute_compatibility(skill_vector, job_vector)`: compute cosine similarity using `sklearn.metrics.pairwise.cosine_similarity`; return float in [0.0, 1.0]
+    - Implement `get_recommendations(student_id, limit=20)`: fetch student's skill vector, fetch all active job roles with vectors, filter by eligibility (CGPA threshold, required skills), compute compatibility scores, sort descending, return top N with job title, company name, score as percentage, required skills
+    - Implement `compute_skill_gap(skill_vector, job_vector)`: element-wise comparison where job requires skill but student lacks it; return list of {skill, deficit_score} sorted by deficit descending; return empty list if full coverage
+    - Implement `shortlist_candidates(job_role_id)`: fetch job role eligibility criteria, filter eligible students, compute compatibility scores, sort descending, return candidate list with name, CGPA, score, matched/missing skills
+    - _Requirements: 6.1, 6.2, 6.3, 6.6, 7.1, 7.2, 7.3, 7.4, 10.1, 10.2, 10.3_
+  - [x] 7.2 Create job matching API routes
+    - Create `backend/app/routes/job_routes.py` with Blueprint
+    - `GET /api/jobs/recommendations` — @jwt_required, @role_required('student'); call get_recommendations(); return sorted list
+    - `GET /api/jobs/{id}/skill-gap` — @jwt_required, @role_required('student'); call compute_skill_gap(); return gap analysis or full coverage message
+    - `GET /api/jobs/{id}/courses` — @jwt_required, @role_required('student'); fetch CourseRecommendations for gap skills; return course list or "no courses available" per skill
+    - Register blueprint in app factory
+    - _Requirements: 6.1, 6.3, 6.4, 6.5, 7.1, 7.3, 7.4, 8.1, 8.2, 8.3_
+  - [ ]* 7.3 Write property test for cosine similarity correctness
+    - **Property 12: Cosine Similarity Correctness** — For any two skill vectors, the computed score SHALL equal sklearn's cosine_similarity reference
+    - **Validates: Requirements 6.2**
+  - [ ]* 7.4 Write property test for recommendation sort order
+    - **Property 13: Job Recommendations Sorted Descending** — For any set of recommendations, scores SHALL be in non-increasing order
+    - **Validates: Requirements 6.3**
+  - [ ]* 7.5 Write property test for eligibility filtering
+    - **Property 14: Eligibility Filtering** — For any student not meeting eligibility criteria, that job SHALL NOT appear in recommendations
+    - **Validates: Requirements 6.6, 10.1**
+  - [ ]* 7.6 Write property test for skill gap correctness
+    - **Property 15: Skill Gap Correctness** — For any student and job vectors, the gap SHALL contain exactly the skills where job requires but student lacks, with deficit in [0.0, 1.0], sorted descending
+    - **Validates: Requirements 7.1, 7.2, 7.3**
+  - [ ]* 7.7 Write property test for full coverage detection
+    - **Property 16: Full Coverage Detection** — For any student vector satisfying all job requirements, the gap SHALL be empty
+    - **Validates: Requirements 7.4**
+  - [ ]* 7.8 Write property test for self-similarity identity
+    - **Property 18: Self-Similarity Identity** — For any non-zero skill vector, self-similarity SHALL produce 1.0
+    - **Validates: Requirements 17.3**
+  - [ ]* 7.9 Write property test for compatibility score symmetry
+    - **Property 19: Compatibility Score Symmetry** — For any vectors A and B, score(A,B) SHALL equal score(B,A)
+    - **Validates: Requirements 17.4**
+
+- [ ] 8. Resume Generator service
+  - [x] 8.1 Implement ResumeGenerator service
+    - Create `backend/app/services/resume_generator.py` with the `ResumeGenerator` class
+    - Implement `validate_profile(profile)`: check required fields (name, institution, degree, skills); return (valid, missing_fields)
+    - Implement `generate_resume(student_id)`: fetch latest profile from DB, validate, build PDF using ReportLab with sections for Personal Info, Academic Details, Technical Skills, Projects, Certifications; return PDF bytes
+    - Implement `get_download_filename(student_name)`: return `Resume_{StudentName}_{Date}.pdf`
+    - Use ReportLab `SimpleDocTemplate` with a professional template layout
+    - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
+  - [x] 8.2 Create resume API routes
+    - Add to profile routes or create `backend/app/routes/resume_routes.py`
+    - `POST /api/resume/generate` — @jwt_required, @role_required('student'); call validate_profile then generate_resume; return success or error with missing fields
+    - `GET /api/resume/download` — @jwt_required, @role_required('student'); generate PDF and return as downloadable attachment with proper filename and Content-Disposition header
+    - Register blueprint in app factory
+    - _Requirements: 4.1, 4.2, 4.3, 4.4_
+  - [ ]* 8.3 Write property test for resume generation completeness
+    - **Property 7: Resume Generation Completeness** — For any complete profile, resume generation SHALL produce a valid PDF containing all profile sections
+    - **Validates: Requirements 4.1, 4.2, 4.5, 4.6**
+  - [ ]* 8.4 Write property test for resume validation rejects incomplete profiles
+    - **Property 8: Resume Validation Rejects Incomplete Profiles** — For any profile missing required fields, generation SHALL fail listing exactly the missing fields
+    - **Validates: Requirements 4.3**
+  - [ ]* 8.5 Write property test for resume data completeness (no data loss)
+    - **Property 21: Resume Data Completeness** — For any valid profile, generating a resume and extracting data SHALL contain all skills, projects, and academic details
+    - **Validates: Requirements 18.2**
+
+- [x] 9. Checkpoint - Verify all backend services
+  - Ensure all tests pass, ask the user if questions arise.
+  - Verify auth flow: register → login → access protected route → logout
+  - Verify profile CRUD and skill analysis pipeline
+  - Verify job matching returns sorted, filtered results
+  - Verify resume PDF generation with complete and incomplete profiles
+
+- [ ] 10. Admin and Placement Officer API routes
+  - [x] 10.1 Implement company and job role management routes
+    - Create `backend/app/routes/admin_routes.py` with Blueprint
+    - `GET /api/admin/companies` — @jwt_required, @role_required('placement_officer'); list all companies
+    - `POST /api/admin/companies` — @jwt_required, @role_required('placement_officer'); validate required fields (company name); create Company record
+    - `PUT /api/admin/companies/{id}` — @jwt_required, @role_required('placement_officer'); update Company record
+    - `POST /api/admin/jobs` — @jwt_required, @role_required('placement_officer'); validate inputs; create JobRole linked to company; call SkillAnalyzer.generate_job_requirement_vector() for required skills; store job_vector_json
+    - `PUT /api/admin/jobs/{id}` — @jwt_required, @role_required('placement_officer'); update JobRole; regenerate job vector if skills changed
+    - `DELETE /api/admin/jobs/{id}` — @jwt_required, @role_required('placement_officer'); remove JobRole from DB
+    - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_
+  - [x] 10.2 Implement candidate shortlisting routes
+    - `GET /api/admin/jobs/{id}/shortlist` — @jwt_required, @role_required('placement_officer'); call JobMatchingEngine.shortlist_candidates(); return sorted candidate list with name, CGPA, score, matched/missing skills; return message if no eligible candidates
+    - `POST /api/admin/jobs/{id}/shortlist` — @jwt_required, @role_required('placement_officer'); accept list of profile_ids; create Shortlist records with status "Shortlisted"
+    - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
+  - [x] 10.3 Implement analytics routes
+    - Create `backend/app/services/analytics_service.py` with the `AnalyticsService` class
+    - Implement `get_overview_stats()`: query total students, placed students, companies, placement percentage
+    - Implement `get_department_breakdown(date_from, date_to)`: group PlacementRecords by department with counts and percentages
+    - Implement `get_company_breakdown(date_from, date_to)`: group PlacementRecords by company
+    - Implement `get_skill_demand()`: aggregate required_skills across active JobRoles, count frequency, sort descending
+    - `GET /api/admin/analytics` — @jwt_required, @role_required('placement_officer'); accept optional date_from/date_to query params; return all analytics data
+    - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5_
+  - [x] 10.4 Implement admin user management routes
+    - `GET /api/admin/users` — @jwt_required, @role_required('admin'); return paginated user list with name, email, role, status; support search by name/email query param
+    - `POST /api/admin/users` — @jwt_required, @role_required('admin'); create user with specified role; hash password
+    - `PUT /api/admin/users/{id}/status` — @jwt_required, @role_required('admin'); activate or deactivate user account
+    - _Requirements: 12.1, 12.2, 12.4, 12.5_
+  - [x] 10.5 Implement skill taxonomy management routes
+    - `GET /api/admin/skills/taxonomy` — @jwt_required, @role_required('admin'); return full taxonomy list
+    - `POST /api/admin/skills/taxonomy` — @jwt_required, @role_required('admin'); add skill with canonical_name, category, synonyms
+    - `PUT /api/admin/skills/taxonomy/{id}` — @jwt_required, @role_required('admin'); update skill entry (name, category, synonyms)
+    - `DELETE /api/admin/skills/taxonomy/{id}` — @jwt_required, @role_required('admin'); mark skill as deprecated (soft delete)
+    - `GET /api/admin/skills/uncategorized` — @jwt_required, @role_required('admin'); return flagged uncategorized skills with occurrence counts
+    - _Requirements: 13.1, 13.2, 13.3, 13.4_
+  - [x] 10.6 Implement course recommendation management route
+    - `POST /api/admin/courses` — @jwt_required, @role_required('placement_officer'); add CourseRecommendation with skill_name, course_name, provider, url
+    - _Requirements: 8.4_
+
+- [ ] 11. Input sanitization and error handling middleware
+  - [x] 11.1 Implement input sanitization utility
+    - Create `backend/app/utils/sanitizer.py`
+    - Implement input sanitization that strips SQL injection patterns and XSS payloads from all string inputs
+    - Apply sanitization as a before_request hook or within marshmallow schema deserialization
+    - _Requirements: 16.3, 14.4_
+  - [x] 11.2 Implement global error handlers
+    - Create `backend/app/utils/error_handlers.py`
+    - Register Flask error handlers for 400, 401, 403, 404, 409, 500, 503 that return the standard JSON error format from the design (error.code, error.message, error.fields)
+    - Implement structured logging for server errors: timestamp, module, error type, request context, stack trace
+    - Handle database connection errors with 503 and user-friendly message
+    - Handle SkillAnalyzer/JobMatchingEngine processing errors with 500 and generic message while logging full details
+    - _Requirements: 14.1, 14.2, 14.3, 14.4_
+  - [ ]* 11.3 Write property test for input sanitization
+    - **Property 22: Input Sanitization** — For any input containing SQL injection or XSS payloads, the system SHALL sanitize or reject before processing
+    - **Validates: Requirements 16.3**
+
+- [x] 12. Checkpoint - Verify complete backend API
+  - Ensure all tests pass, ask the user if questions arise.
+  - Verify all 28 REST API endpoints respond correctly
+  - Verify role-based access control across all admin/officer/student endpoints
+  - Verify error responses follow the standard JSON format
+  - Verify input sanitization blocks malicious payloads
+
+- [ ] 13. React frontend — authentication pages
+  - [x] 13.1 Implement AuthContext and routing
+    - Create `frontend/src/context/AuthContext.tsx` with React Context for auth state (user, token, role, isAuthenticated)
+    - Implement login/logout/register functions that call backend API and store JWT in localStorage
+    - Create `frontend/src/App.tsx` with React Router: public routes (login, register) and protected routes (student dashboard, admin dashboard)
+    - Implement `ProtectedRoute` component that checks auth state and role, redirects to login if unauthenticated
+    - _Requirements: 2.1, 2.3, 2.5, 2.6_
+  - [x] 13.2 Implement Login and Registration pages
+    - Create `frontend/src/pages/Login.tsx` with email/password form, client-side validation, API call, error display (generic "Invalid credentials" message), redirect to dashboard on success
+    - Create `frontend/src/pages/Register.tsx` with name/email/phone/password form, client-side validation (email format, password >= 8 chars), API call, error display with field-specific messages, redirect to login on success
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 14.4_
+
+- [ ] 14. React frontend — student pages
+  - [x] 14.1 Implement Student Dashboard and Profile page
+    - Create `frontend/src/pages/student/Dashboard.tsx` with navigation to profile, skills, jobs, resume sections
+    - Create `frontend/src/pages/student/Profile.tsx` with form for academic details (institution, degree, branch, CGPA, graduation year), skills list (add/remove text entries), projects (title, description, technologies), certifications (name, issuer, date)
+    - Implement client-side validation: required fields, CGPA in [0.0, 10.0]
+    - On save, call PUT /api/profile and display success/error feedback
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 14.4_
+  - [x] 14.2 Implement Skill Analysis page
+    - Create `frontend/src/pages/student/SkillAnalysis.tsx`
+    - Call GET /api/skills/analysis and display categorized skill breakdown grouped by category (Programming Languages, Frameworks, etc.)
+    - Show visual representation (e.g., grouped list or simple chart)
+    - _Requirements: 5.2, 5.6_
+  - [x] 14.3 Implement Job Recommendations page
+    - Create `frontend/src/pages/student/JobRecommendations.tsx`
+    - Call GET /api/jobs/recommendations and display sorted list with job title, company name, compatibility score as percentage, required skills
+    - Display "No job roles currently available" message when result is empty
+    - For each job, provide a link/button to view skill gap details
+    - _Requirements: 6.1, 6.3, 6.4, 6.5_
+  - [x] 14.4 Implement Skill Gap and Course Recommendations page
+    - Create `frontend/src/pages/student/SkillGap.tsx`
+    - Call GET /api/jobs/{id}/skill-gap and display missing/weak skills sorted by deficit score descending
+    - Display "Full skill coverage" message when no gaps exist
+    - Call GET /api/jobs/{id}/courses and display course recommendations (course name, provider, URL, skill addressed)
+    - Display "No courses available" per skill when none exist
+    - _Requirements: 7.1, 7.2, 7.3, 7.4, 8.1, 8.2, 8.3_
+  - [x] 14.5 Implement Resume Generation page
+    - Create `frontend/src/pages/student/Resume.tsx`
+    - Button to call POST /api/resume/generate; display error with missing fields if profile incomplete
+    - Button to call GET /api/resume/download; trigger browser file download of PDF
+    - _Requirements: 4.1, 4.2, 4.3, 4.4_
+
+- [ ] 15. React frontend — admin and placement officer pages
+  - [x] 15.1 Implement Company Management page
+    - Create `frontend/src/pages/admin/Companies.tsx`
+    - Display list of companies; forms to add/edit company (name, industry, location, contact details)
+    - Client-side validation: company name required
+    - Call POST/PUT /api/admin/companies endpoints
+    - _Requirements: 9.1, 9.4, 9.6_
+  - [x] 15.2 Implement Job Role Management page
+    - Create `frontend/src/pages/admin/JobRoles.tsx`
+    - Display job roles per company; forms to add/edit/delete job role (title, description, required skills, CGPA threshold, eligibility criteria)
+    - Call POST/PUT/DELETE /api/admin/jobs endpoints
+    - _Requirements: 9.2, 9.3, 9.4, 9.5_
+  - [x] 15.3 Implement Candidate Shortlisting page
+    - Create `frontend/src/pages/admin/Shortlist.tsx`
+    - Select a job role, call GET /api/admin/jobs/{id}/shortlist to display eligible candidates sorted by compatibility score
+    - Display each candidate's name, CGPA, compatibility score, matched skills, missing skills
+    - Display "No eligible candidates" message when list is empty
+    - Provide checkboxes to select candidates and button to call POST /api/admin/jobs/{id}/shortlist to mark as shortlisted
+    - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
+  - [x] 15.4 Implement Placement Analytics Dashboard
+    - Create `frontend/src/pages/admin/Analytics.tsx`
+    - Call GET /api/admin/analytics and display: overview stats (total students, placed, companies, placement %), department-wise breakdown, company-wise breakdown, skill demand analysis
+    - Add date range filter inputs that re-fetch analytics with date_from/date_to params
+    - Use charts (bar chart for department breakdown, pie chart for placement %, list for skill demand)
+    - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5_
+  - [x] 15.5 Implement User Management page (Admin only)
+    - Create `frontend/src/pages/admin/UserManagement.tsx`
+    - Display paginated user list with name, email, role, status
+    - Search bar to filter by name or email
+    - Form to create new user with role selection
+    - Button to activate/deactivate user accounts
+    - Call GET/POST /api/admin/users and PUT /api/admin/users/{id}/status endpoints
+    - _Requirements: 12.1, 12.2, 12.4, 12.5_
+  - [x] 15.6 Implement Skill Taxonomy Management page (Admin only)
+    - Create `frontend/src/pages/admin/SkillTaxonomy.tsx`
+    - Display taxonomy list with canonical name, category, synonyms
+    - Forms to add/edit skill entries; button to deprecate skills
+    - Display uncategorized skills with occurrence counts for review
+    - Call GET/POST/PUT/DELETE /api/admin/skills/taxonomy and GET /api/admin/skills/uncategorized endpoints
+    - _Requirements: 13.1, 13.2, 13.3, 13.4_
+  - [x] 15.7 Implement Course Recommendation management
+    - Add course management section to admin interface (can be part of SkillTaxonomy page or separate)
+    - Form to add course recommendation (skill_name, course_name, provider, url)
+    - Call POST /api/admin/courses endpoint
+    - _Requirements: 8.4_
+
+- [x] 16. Checkpoint - Verify frontend integration
+  - Ensure all tests pass, ask the user if questions arise.
+  - Verify login/register flow works end-to-end with backend
+  - Verify student can create profile, view skills, get recommendations, generate resume
+  - Verify placement officer can manage companies, job roles, shortlist candidates, view analytics
+  - Verify admin can manage users, skill taxonomy, and courses
+  - Verify role-based UI: students cannot see admin pages, officers cannot see admin-only pages
+
+- [ ] 17. Final integration and wiring
+  - [x] 17.1 Wire Flask to serve React build
+    - Configure Flask to serve the React production build (`frontend/build/`) as static files
+    - Add catch-all route for React Router client-side routing (serve index.html for non-API routes)
+    - Ensure CORS is properly configured for development (separate ports) and production (same origin)
+    - _Requirements: 15.1, 16.1_
+  - [x] 17.2 Add graceful degradation handling
+    - If SkillAnalyzer fails during profile save, save profile without skill analysis and log error; retry analysis on next profile view
+    - If JobMatchingEngine fails, return cached recommendations or "temporarily unavailable" message
+    - If ResumeGenerator fails, return error with retry option
+    - _Requirements: 14.2, 14.3_
+  - [ ]* 17.3 Write integration tests for end-to-end flows
+    - Test registration → login → profile creation → skill analysis → job recommendations → resume generation flow
+    - Test placement officer: login → add company → add job role → view shortlist → mark shortlisted
+    - Test admin: login → manage users → manage taxonomy → manage courses
+    - _Requirements: 1.1, 2.1, 3.1, 5.1, 6.1, 4.1, 9.1, 10.1, 12.1, 13.1_
+
+- [x] 18. Final checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+  - Verify all 18 requirements are covered by implementation
+  - Verify all correctness properties have corresponding property tests
+  - Confirm no orphaned or unwired code remains
+
+## Notes
+
+- Tasks marked with `*` are optional and can be skipped for faster MVP
+- Each task references specific requirements for traceability
+- Checkpoints ensure incremental validation at key milestones
+- Property tests validate the 22 universal correctness properties from the design document
+- Unit tests validate specific examples and edge cases
+- The backend uses Python (Flask, SpaCy, scikit-learn, ReportLab) and the frontend uses React with TypeScript
+- All API endpoints follow the REST conventions and error format defined in the design document

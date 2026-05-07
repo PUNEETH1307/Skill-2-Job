@@ -1,0 +1,126 @@
+import { useState, type FormEvent } from 'react';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { AxiosError } from 'axios';
+
+export default function Login() {
+  const { login, isAuthenticated, user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // If already authenticated, redirect to appropriate dashboard
+  if (isAuthenticated && user) {
+    const target =
+      user.role === 'placement_officer' || user.role === 'admin'
+        ? '/admin/dashboard'
+        : '/student/dashboard';
+    navigate(target, { replace: true });
+    return null;
+  }
+
+  // Check for success message from registration redirect
+  const successMessage =
+    (location.state as { message?: string } | null)?.message ?? '';
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    // Client-side validation
+    if (!email.trim() || !password.trim()) {
+      setError('Please enter both email and password.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const authUser = await login(email, password);
+
+      // Redirect based on role
+      if (
+        authUser.role === 'placement_officer' ||
+        authUser.role === 'admin'
+      ) {
+        navigate('/admin/dashboard', { replace: true });
+      } else {
+        navigate('/student/dashboard', { replace: true });
+      }
+    } catch (err) {
+      // Always show generic message per requirement 2.2
+      if (err instanceof AxiosError && err.response) {
+        setError('Invalid credentials');
+      } else {
+        setError('Unable to connect to the server. Please try again later.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-container">
+      <div className="auth-card">
+        <h1 className="auth-brand">Skill2Job</h1>
+        <h2 className="auth-subtitle">Sign In</h2>
+
+        {successMessage && (
+          <div className="auth-success-banner">{successMessage}</div>
+        )}
+
+        {error && <div className="auth-error-banner">{error}</div>}
+
+        <form onSubmit={handleSubmit}>
+          <div className="auth-field">
+            <label htmlFor="email" className="auth-label">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="auth-input"
+              placeholder="you@example.com"
+              autoComplete="email"
+            />
+          </div>
+
+          <div className="auth-field">
+            <label htmlFor="password" className="auth-label">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="auth-input"
+              placeholder="Enter your password"
+              autoComplete="current-password"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="auth-button"
+          >
+            {loading ? 'Signing in…' : 'Sign In'}
+          </button>
+        </form>
+
+        <p className="auth-footer">
+          Don&apos;t have an account?{' '}
+          <Link to="/register">
+            Register
+          </Link>
+        </p>
+      </div>
+    </div>
+  );
+}

@@ -12,6 +12,7 @@ import SkillAnalysis from './pages/student/SkillAnalysis';
 import JobRecommendations from './pages/student/JobRecommendations';
 import SkillGap from './pages/student/SkillGap';
 import Resume from './pages/student/Resume';
+import Settings from './pages/student/Settings';
 import AdminDashboard from './pages/admin/Dashboard';
 import Companies from './pages/admin/Companies';
 import JobRoles from './pages/admin/JobRoles';
@@ -42,6 +43,7 @@ function App() {
           <Route path="/student/jobs" element={<JobRecommendations />} />
           <Route path="/student/jobs/:id/gap" element={<SkillGap />} />
           <Route path="/student/resume" element={<Resume />} />
+          <Route path="/student/settings" element={<Settings />} />
         </Route>
 
         {/* Admin / Placement Officer protected routes */}

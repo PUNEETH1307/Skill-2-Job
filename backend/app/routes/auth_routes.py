@@ -315,3 +315,57 @@ def logout():
     auth = AuthModule()
     auth.logout(g.jwt_token)
     return jsonify({"message": "Logged out successfully"}), 200
+
+
+@auth_bp.route("/change-password", methods=["PUT"])
+@jwt_required
+def change_password():
+    """Change the authenticated user's password.
+
+    Accepts JSON body with current_password and new_password.
+    Verifies the current password before updating.
+    """
+    from flask import g
+    import bcrypt
+    from app import db
+    from app.models import User
+
+    json_data = request.get_json(silent=True)
+    if not json_data:
+        return (
+            jsonify({"error": {"code": "VALIDATION_ERROR", "message": "Request body must be valid JSON"}}),
+            400,
+        )
+
+    current_password = json_data.get("current_password", "")
+    new_password = json_data.get("new_password", "")
+
+    if not current_password or not new_password:
+        return (
+            jsonify({"error": {"code": "VALIDATION_ERROR", "message": "Both current and new password are required"}}),
+            400,
+        )
+
+    if len(new_password) < 8:
+        return (
+            jsonify({"error": {"code": "VALIDATION_ERROR", "message": "New password must be at least 8 characters"}}),
+            400,
+        )
+
+    user_id = g.current_user["user_id"]
+    user = db.session.get(User, user_id)
+    if user is None:
+        return jsonify({"error": {"code": "NOT_FOUND", "message": "User not found"}}), 404
+
+    # Verify current password
+    if not bcrypt.checkpw(current_password.encode("utf-8"), user.password_hash.encode("utf-8")):
+        return (
+            jsonify({"error": {"code": "AUTHENTICATION_ERROR", "message": "Current password is incorrect"}}),
+            401,
+        )
+
+    # Update password
+    user.password_hash = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    db.session.commit()
+
+    return jsonify({"message": "Password changed successfully"}), 200

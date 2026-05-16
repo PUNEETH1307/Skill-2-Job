@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -20,29 +21,12 @@ import UserManagement from './pages/admin/UserManagement';
 import SkillTaxonomy from './pages/admin/SkillTaxonomy';
 import Courses from './pages/admin/Courses';
 
-/**
- * Redirects the root path based on authentication state and role.
- */
-function RootRedirect() {
-  const { isAuthenticated, user } = useAuth();
-
-  if (!isAuthenticated || !user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (user.role === 'placement_officer' || user.role === 'admin') {
-    return <Navigate to="/admin/dashboard" replace />;
-  }
-
-  return <Navigate to="/student/dashboard" replace />;
-}
-
 function App() {
   return (
     <AuthProvider>
       <Routes>
-        {/* Root redirect */}
-        <Route path="/" element={<RootRedirect />} />
+        {/* Landing page with 3 role options */}
+        <Route path="/" element={<Landing />} />
 
         {/* Public routes */}
         <Route path="/login" element={<Login />} />
@@ -76,7 +60,7 @@ function App() {
           <Route path="/admin/skills" element={<SkillTaxonomy />} />
         </Route>
 
-        {/* Catch-all: redirect to root */}
+        {/* Catch-all: redirect to landing */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AuthProvider>

@@ -18,6 +18,8 @@ import Companies from './pages/admin/Companies';
 import JobRoles from './pages/admin/JobRoles';
 import Shortlist from './pages/admin/Shortlist';
 import Analytics from './pages/admin/Analytics';
+import Interviews from './pages/admin/Interviews';
+import Notifications from './pages/admin/Notifications';
 import UserManagement from './pages/admin/UserManagement';
 import SkillTaxonomy from './pages/admin/SkillTaxonomy';
 import Courses from './pages/admin/Courses';
@@ -54,6 +56,8 @@ function App() {
           <Route path="/admin/shortlist" element={<Shortlist />} />
           <Route path="/admin/analytics" element={<Analytics />} />
           <Route path="/admin/courses" element={<Courses />} />
+          <Route path="/admin/interviews" element={<Interviews />} />
+          <Route path="/admin/notifications" element={<Notifications />} />
         </Route>
 
         {/* Admin-only routes */}

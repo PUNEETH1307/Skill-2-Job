@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
-import SummaryCard from '../../components/SummaryCard';
+import { useToast } from '../../components/Toast';
 
 interface PlacementOverview {
   total_students: number;
@@ -22,10 +22,7 @@ interface CoordinatorData {
     compatibility_score: number;
     shortlisted_at: string;
   }>;
-  top_skills_demand: Array<{
-    skill: string;
-    count: number;
-  }>;
+  top_skills_demand: Array<{ skill: string; count: number }>;
 }
 
 interface AdminData {
@@ -50,272 +47,284 @@ function isAdminData(_data: DashboardData, role: string): _data is AdminData {
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
+  const { showToast } = useToast();
+  const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const isAdmin = user?.role === 'admin';
   const endpoint = isAdmin ? '/dashboard/admin' : '/dashboard/coordinator';
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
       const response = await api.get(endpoint);
       setData(response.data);
     } catch {
-      setError('Failed to load dashboard data. Please try again.');
+      showToast('Failed to load dashboard', 'error');
     } finally {
       setLoading(false);
     }
-  }, [endpoint]);
+  }, [endpoint, showToast]);
 
   useEffect(() => {
     fetchDashboard();
   }, [fetchDashboard]);
 
+  const handleLogout = () => {
+    logout();
+    showToast('Logged out successfully', 'info');
+    navigate('/');
+  };
+
   if (loading) {
     return (
-      <div className="dash-container">
-        <div className="dash-loading">Loading dashboard...</div>
+      <div className="admin-layout">
+        <AdminSidebar active="dashboard" isAdmin={isAdmin} sidebarOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} onLogout={handleLogout} />
+        <main className="admin-main">
+          <div className="dash-loading">Loading dashboard...</div>
+        </main>
       </div>
     );
   }
-
-  if (error) {
-    return (
-      <div className="dash-container">
-        <div className="dash-error">
-          <p>{error}</p>
-          <button onClick={fetchDashboard}>Retry</button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!data) return null;
 
   return (
-    <div className="dash-container">
-      <div className="dash-header">
-        <h1 className="dash-title">
-          {isAdmin ? 'Admin Dashboard' : 'Coordinator Dashboard'}
-        </h1>
-        <button onClick={logout} className="dash-logout-btn">
-          Logout
-        </button>
-      </div>
-      <p className="dash-welcome">
-        Welcome, {user?.name ?? 'User'}! Role: {user?.role}
-      </p>
+    <div className="admin-layout">
+      <AdminSidebar active="dashboard" isAdmin={isAdmin} sidebarOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} onLogout={handleLogout} />
 
-      {isAdmin && data && isAdminData(data, user?.role ?? '')
-        ? renderAdminView(data)
-        : renderCoordinatorView(data as CoordinatorData)}
+      <main className="admin-main">
+        <button className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>☰</button>
+
+        {/* Welcome */}
+        <div className="welcome-section">
+          <div>
+            <h1 className="welcome-title">
+              {isAdmin ? 'Admin Dashboard' : 'Placement Coordinator'} 🏢
+            </h1>
+            <p className="welcome-sub">Welcome, {user?.name}! Manage the placement ecosystem.</p>
+          </div>
+        </div>
+
+        {data && isAdmin && isAdminData(data, user?.role ?? '') ? (
+          <AdminView data={data} />
+        ) : data ? (
+          <CoordinatorView data={data as CoordinatorData} />
+        ) : null}
+      </main>
     </div>
   );
 }
 
-function renderCoordinatorView(data: CoordinatorData) {
+function CoordinatorView({ data }: { data: CoordinatorData }) {
   return (
     <>
-      {/* Placement Overview */}
-      <section className="dash-section">
-        <h2>Placement Overview</h2>
-        <div className="dash-grid">
-          <SummaryCard label="Total Students" value={data.placement_overview.total_students} />
-          <SummaryCard label="Placed Students" value={data.placement_overview.placed_students} />
-          <SummaryCard label="Total Companies" value={data.placement_overview.total_companies} />
-          <SummaryCard
-            label="Placement %"
-            value={`${data.placement_overview.placement_percentage}%`}
-            highlight
-          />
-          <SummaryCard label="Active Jobs" value={data.active_job_count} />
-          <SummaryCard label="Shortlisted" value={data.shortlisted_count} />
+      {/* Stats */}
+      <div className="stats-grid-student">
+        <div className="stat-widget stat-widget-primary">
+          <div className="stat-widget-icon">👨‍🎓</div>
+          <div className="stat-widget-value">{data.placement_overview.total_students}</div>
+          <div className="stat-widget-label">Total Students</div>
         </div>
-      </section>
+        <div className="stat-widget stat-widget-success">
+          <div className="stat-widget-icon">✅</div>
+          <div className="stat-widget-value">{data.placement_overview.placed_students}</div>
+          <div className="stat-widget-label">Placed</div>
+        </div>
+        <div className="stat-widget stat-widget-info">
+          <div className="stat-widget-icon">🏢</div>
+          <div className="stat-widget-value">{data.placement_overview.total_companies}</div>
+          <div className="stat-widget-label">Companies</div>
+        </div>
+        <div className="stat-widget stat-widget-accent">
+          <div className="stat-widget-icon">📈</div>
+          <div className="stat-widget-value">{data.placement_overview.placement_percentage}%</div>
+          <div className="stat-widget-label">Placement Rate</div>
+        </div>
+      </div>
+
+      <div className="stats-grid-student" style={{ marginTop: '1rem' }}>
+        <div className="stat-widget">
+          <div className="stat-widget-icon">💼</div>
+          <div className="stat-widget-value">{data.active_job_count}</div>
+          <div className="stat-widget-label">Active Jobs</div>
+        </div>
+        <div className="stat-widget">
+          <div className="stat-widget-icon">📋</div>
+          <div className="stat-widget-value">{data.shortlisted_count}</div>
+          <div className="stat-widget-label">Shortlisted</div>
+        </div>
+      </div>
 
       {/* Recent Shortlists */}
-      <section className="dash-section">
-        <h2>Recent Shortlists</h2>
+      <div className="dash-widget" style={{ marginTop: '1.5rem' }}>
+        <h3 className="dash-widget-title">📋 Recent Shortlists</h3>
         {data.recent_shortlists.length === 0 ? (
-          <div className="dash-empty-state">
-            <p>No recent activity</p>
-          </div>
+          <p className="empty-text">No recent activity</p>
         ) : (
-          <table className="dash-recent-table">
-            <thead>
-              <tr>
-                <th>Student</th>
-                <th>Job Title</th>
-                <th>Company</th>
-                <th>Score</th>
-                <th>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.recent_shortlists.map((item, idx) => (
-                <tr key={idx}>
-                  <td>{item.student_name}</td>
-                  <td>{item.job_title}</td>
-                  <td>{item.company_name}</td>
-                  <td>{item.compatibility_score}%</td>
-                  <td>{new Date(item.shortlisted_at).toLocaleDateString()}</td>
+          <div className="table-wrapper">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Job</th>
+                  <th>Company</th>
+                  <th>Score</th>
+                  <th>Date</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data.recent_shortlists.map((item, idx) => (
+                  <tr key={idx}>
+                    <td>{item.student_name}</td>
+                    <td>{item.job_title}</td>
+                    <td>{item.company_name}</td>
+                    <td><strong>{item.compatibility_score}%</strong></td>
+                    <td>{new Date(item.shortlisted_at).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-      </section>
+      </div>
 
-      {/* Top In-Demand Skills */}
-      <section className="dash-section">
-        <h2>Top In-Demand Skills</h2>
-        <ul>
-          {data.top_skills_demand.map((skill, idx) => (
-            <li key={idx}>
-              {skill.skill} — {skill.count} occurrence{skill.count !== 1 ? 's' : ''}
-            </li>
+      {/* Top Skills */}
+      <div className="dash-widget" style={{ marginTop: '1.5rem' }}>
+        <h3 className="dash-widget-title">🔥 Top In-Demand Skills</h3>
+        <div className="skill-bars">
+          {data.top_skills_demand.slice(0, 8).map((s, idx) => (
+            <div key={idx} className="skill-bar-item">
+              <div className="skill-bar-header">
+                <span>{s.skill}</span>
+                <span className="skill-bar-count">{s.count}</span>
+              </div>
+              <div className="skill-bar-track">
+                <div className="skill-bar-fill" style={{
+                  width: `${Math.min(100, (s.count / Math.max(...data.top_skills_demand.map(d => d.count))) * 100)}%`
+                }} />
+              </div>
+            </div>
           ))}
-        </ul>
-      </section>
-
-      {/* Quick Actions */}
-      <section className="dash-section">
-        <h2>Quick Actions</h2>
-        <div className="dash-grid">
-          <Link to="/admin/companies" className="dash-card">
-            <h3 className="dash-card-title">Companies</h3>
-            <p className="dash-card-desc">
-              Manage company profiles — add, edit, and view registered companies.
-            </p>
-          </Link>
-          <Link to="/admin/jobs" className="dash-card">
-            <h3 className="dash-card-title">Job Roles</h3>
-            <p className="dash-card-desc">
-              Create and manage job roles with skill requirements and eligibility criteria.
-            </p>
-          </Link>
-          <Link to="/admin/shortlist" className="dash-card">
-            <h3 className="dash-card-title">Candidate Shortlisting</h3>
-            <p className="dash-card-desc">
-              View eligible candidates for job roles and mark them as shortlisted.
-            </p>
-          </Link>
-          <Link to="/admin/analytics" className="dash-card">
-            <h3 className="dash-card-title">Placement Analytics</h3>
-            <p className="dash-card-desc">
-              View placement statistics, department breakdowns, and skill demand analysis.
-            </p>
-          </Link>
-          <Link to="/admin/courses" className="dash-card">
-            <h3 className="dash-card-title">Course Recommendations</h3>
-            <p className="dash-card-desc">
-              Add course recommendations mapped to skills for student skill gap guidance.
-            </p>
-          </Link>
         </div>
-      </section>
+      </div>
     </>
   );
 }
 
-function renderAdminView(data: AdminData) {
+function AdminView({ data }: { data: AdminData }) {
   return (
     <>
-      {/* User Counts */}
-      <section className="dash-section">
-        <h2>User Overview</h2>
-        <div className="dash-grid">
-          <SummaryCard label="Students" value={data.user_counts.by_role['student'] ?? 0} />
-          <SummaryCard label="Placement Officers" value={data.user_counts.by_role['placement_officer'] ?? 0} />
-          <SummaryCard label="Admins" value={data.user_counts.by_role['admin'] ?? 0} />
-          <SummaryCard label="Active Users" value={data.user_counts.by_status['active'] ?? 0} />
-          <SummaryCard label="Inactive Users" value={data.user_counts.by_status['inactive'] ?? 0} />
-          <SummaryCard label="Total Users" value={data.user_counts.total} highlight />
+      {/* Stats */}
+      <div className="stats-grid-student">
+        <div className="stat-widget stat-widget-primary">
+          <div className="stat-widget-icon">👥</div>
+          <div className="stat-widget-value">{data.user_counts.total}</div>
+          <div className="stat-widget-label">Total Users</div>
         </div>
-      </section>
+        <div className="stat-widget stat-widget-success">
+          <div className="stat-widget-icon">✅</div>
+          <div className="stat-widget-value">{data.placement_overview.placed_students}</div>
+          <div className="stat-widget-label">Placed</div>
+        </div>
+        <div className="stat-widget stat-widget-info">
+          <div className="stat-widget-icon">🧠</div>
+          <div className="stat-widget-value">{data.taxonomy_health.total_skills}</div>
+          <div className="stat-widget-label">Skills in Taxonomy</div>
+        </div>
+        <div className="stat-widget stat-widget-accent">
+          <div className="stat-widget-icon">📈</div>
+          <div className="stat-widget-value">{data.placement_overview.placement_percentage}%</div>
+          <div className="stat-widget-label">Placement Rate</div>
+        </div>
+      </div>
 
-      {/* Taxonomy Health */}
-      <section className="dash-section">
-        <h2>Taxonomy Health</h2>
-        <div className="dash-grid">
-          <SummaryCard label="Total Skills" value={data.taxonomy_health.total_skills} />
-          <SummaryCard label="Deprecated Skills" value={data.taxonomy_health.deprecated_skills} />
-          <SummaryCard
-            label="Uncategorized Pending"
-            value={data.taxonomy_health.uncategorized_pending}
-            highlight={data.taxonomy_health.uncategorized_pending > 0}
-          />
+      {/* User Breakdown */}
+      <div className="dashboard-grid-2col" style={{ marginTop: '1.5rem' }}>
+        <div className="dash-widget">
+          <h3 className="dash-widget-title">👥 Users by Role</h3>
+          <div className="admin-stat-list">
+            {Object.entries(data.user_counts.by_role).map(([role, count]) => (
+              <div key={role} className="admin-stat-row">
+                <span className="admin-stat-label">{role.replace('_', ' ')}</span>
+                <span className="admin-stat-value">{count}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      </section>
+        <div className="dash-widget">
+          <h3 className="dash-widget-title">🛡️ System Health</h3>
+          <div className="admin-stat-list">
+            <div className="admin-stat-row">
+              <span className="admin-stat-label">Active Skills</span>
+              <span className="admin-stat-value">{data.taxonomy_health.total_skills}</span>
+            </div>
+            <div className="admin-stat-row">
+              <span className="admin-stat-label">Deprecated Skills</span>
+              <span className="admin-stat-value">{data.taxonomy_health.deprecated_skills}</span>
+            </div>
+            <div className="admin-stat-row">
+              <span className="admin-stat-label">Pending Review</span>
+              <span className="admin-stat-value" style={{ color: data.taxonomy_health.uncategorized_pending > 0 ? 'var(--warning)' : 'inherit' }}>
+                {data.taxonomy_health.uncategorized_pending}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
 
-      {/* Placement Overview */}
-      <section className="dash-section">
-        <h2>Placement Overview</h2>
-        <div className="dash-grid">
-          <SummaryCard label="Total Students" value={data.placement_overview.total_students} />
-          <SummaryCard label="Placed Students" value={data.placement_overview.placed_students} />
-          <SummaryCard label="Total Companies" value={data.placement_overview.total_companies} />
-          <SummaryCard
-            label="Placement %"
-            value={`${data.placement_overview.placement_percentage}%`}
-            highlight
-          />
-        </div>
-      </section>
+/* Admin Sidebar */
+interface SidebarProps {
+  active: string;
+  isAdmin: boolean;
+  sidebarOpen: boolean;
+  onToggle: () => void;
+  onLogout: () => void;
+}
 
-      {/* Quick Actions */}
-      <section className="dash-section">
-        <h2>Quick Actions</h2>
-        <div className="dash-grid">
-          <Link to="/admin/companies" className="dash-card">
-            <h3 className="dash-card-title">Companies</h3>
-            <p className="dash-card-desc">
-              Manage company profiles — add, edit, and view registered companies.
-            </p>
-          </Link>
-          <Link to="/admin/jobs" className="dash-card">
-            <h3 className="dash-card-title">Job Roles</h3>
-            <p className="dash-card-desc">
-              Create and manage job roles with skill requirements and eligibility criteria.
-            </p>
-          </Link>
-          <Link to="/admin/shortlist" className="dash-card">
-            <h3 className="dash-card-title">Candidate Shortlisting</h3>
-            <p className="dash-card-desc">
-              View eligible candidates for job roles and mark them as shortlisted.
-            </p>
-          </Link>
-          <Link to="/admin/analytics" className="dash-card">
-            <h3 className="dash-card-title">Placement Analytics</h3>
-            <p className="dash-card-desc">
-              View placement statistics, department breakdowns, and skill demand analysis.
-            </p>
-          </Link>
-          <Link to="/admin/courses" className="dash-card">
-            <h3 className="dash-card-title">Course Recommendations</h3>
-            <p className="dash-card-desc">
-              Add course recommendations mapped to skills for student skill gap guidance.
-            </p>
-          </Link>
-          <Link to="/admin/users" className="dash-card-admin">
-            <h3 className="dash-card-title">User Management</h3>
-            <p className="dash-card-desc">
-              Create accounts, search users, and activate or deactivate user accounts.
-            </p>
-            <span className="dash-admin-badge">Admin Only</span>
-          </Link>
-          <Link to="/admin/skills" className="dash-card-admin">
-            <h3 className="dash-card-title">Skill Taxonomy</h3>
-            <p className="dash-card-desc">
-              Manage the skill taxonomy — add, edit, deprecate skills and review uncategorized terms.
-            </p>
-            <span className="dash-admin-badge">Admin Only</span>
-          </Link>
+function AdminSidebar({ active, isAdmin, sidebarOpen, onToggle, onLogout }: SidebarProps) {
+  const navItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: '🏠', path: '/admin/dashboard' },
+    { id: 'companies', label: 'Companies', icon: '🏢', path: '/admin/companies' },
+    { id: 'jobs', label: 'Job Roles', icon: '💼', path: '/admin/jobs' },
+    { id: 'shortlist', label: 'Shortlist', icon: '📋', path: '/admin/shortlist' },
+    { id: 'analytics', label: 'Analytics', icon: '📊', path: '/admin/analytics' },
+    { id: 'courses', label: 'Courses', icon: '📚', path: '/admin/courses' },
+    ...(isAdmin ? [
+      { id: 'users', label: 'User Management', icon: '👥', path: '/admin/users' },
+      { id: 'skills', label: 'Skill Taxonomy', icon: '🧠', path: '/admin/skills' },
+    ] : []),
+  ];
+
+  return (
+    <>
+      {sidebarOpen && <div className="sidebar-overlay" onClick={onToggle} />}
+      <aside className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}>
+        <div className="sidebar-brand">
+          <Link to="/">Skill2Job</Link>
+          <span className="sidebar-role-badge">{isAdmin ? 'Admin' : 'Officer'}</span>
         </div>
-      </section>
+        <nav className="sidebar-nav">
+          {navItems.map((item) => (
+            <Link
+              key={item.id}
+              to={item.path}
+              className={`sidebar-link ${active === item.id ? 'active' : ''}`}
+            >
+              <span className="sidebar-link-icon">{item.icon}</span>
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          <button onClick={onLogout} className="sidebar-logout-btn">
+            🚪 Logout
+          </button>
+        </div>
+      </aside>
     </>
   );
 }

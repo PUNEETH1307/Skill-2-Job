@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../components/Toast';
 import { AxiosError } from 'axios';
 
 export default function Login() {
   const { login, isAuthenticated, user } = useAuth();
+  const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -40,6 +42,7 @@ export default function Login() {
     setLoading(true);
     try {
       const authUser = await login(email, password);
+      showToast(`Welcome back, ${authUser.name}!`, 'success');
 
       // Redirect based on role
       if (
@@ -54,8 +57,10 @@ export default function Login() {
       // Always show generic message per requirement 2.2
       if (err instanceof AxiosError && err.response) {
         setError('Invalid credentials');
+        showToast('Invalid credentials', 'error');
       } else {
         setError('Unable to connect to the server. Please try again later.');
+        showToast('Unable to connect to the server', 'error');
       }
     } finally {
       setLoading(false);

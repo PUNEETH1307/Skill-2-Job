@@ -2,6 +2,7 @@ import { useEffect, useState, type ChangeEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import api from '../../services/api';
+import { useToast } from '../../components/Toast';
 
 interface ResumeUploadEntry {
   id: number;
@@ -11,6 +12,7 @@ interface ResumeUploadEntry {
 }
 
 export default function Resume() {
+  const { showToast } = useToast();
   const [generating, setGenerating] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -64,6 +66,7 @@ export default function Resume() {
       setGenerated(true);
       setGeneratedFile(res.data.filename ?? 'resume.pdf');
       setSuccessMsg('Resume generated successfully. You can download the latest PDF now.');
+      showToast('Resume generated successfully!', 'success');
     } catch (err) {
       if (err instanceof AxiosError && err.response) {
         const apiErr = err.response.data?.error;
@@ -141,6 +144,7 @@ export default function Resume() {
       setSelectedFile(null);
       await fetchUploads();
       setSuccessMsg('Resume uploaded successfully.');
+      showToast('Resume uploaded successfully!', 'success');
     } catch (err) {
       setError(readApiError(err, 'Resume upload failed.'));
     } finally {

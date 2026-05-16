@@ -1,6 +1,7 @@
 import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
+import { useToast } from '../../components/Toast';
 import { AxiosError } from 'axios';
 
 interface ProjectEntry {
@@ -45,6 +46,7 @@ const emptyProject: ProjectEntry = { title: '', description: '', technologies: '
 const emptyCert: CertificationEntry = { name: '', issuer: '', issue_date: '' };
 
 export default function Profile() {
+  const { showToast } = useToast();
   const [mode, setMode] = useState<ProfileMode>('choose');
   const [form, setForm] = useState<ProfileData>({
     institution: '',
@@ -164,6 +166,7 @@ export default function Profile() {
         certifications: form.certifications,
       });
       setSuccessMsg('Profile saved successfully!');
+      showToast('Profile saved successfully!', 'success');
       setHasExistingProfile(true);
     } catch (err) {
       if (err instanceof AxiosError && err.response) {
@@ -212,6 +215,7 @@ export default function Profile() {
       });
 
       setSuccessMsg('Resume parsed successfully! Review and complete your profile below.');
+      showToast('Resume parsed successfully!', 'success');
       setMode('form');
     } catch (err) {
       if (err instanceof AxiosError && err.response) {

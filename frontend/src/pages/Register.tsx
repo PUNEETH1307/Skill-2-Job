@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../components/Toast';
 import { AxiosError } from 'axios';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
@@ -15,6 +16,7 @@ interface FieldErrors {
 
 export default function Register() {
   const { register } = useAuth();
+  const { showToast } = useToast();
   const navigate = useNavigate();
 
   const [name, setName] = useState('');
@@ -59,6 +61,7 @@ export default function Register() {
 
     try {
       await register(name, email, phone, password);
+      showToast('Registration successful! Please sign in.', 'success');
       // Redirect to login with success message
       navigate('/login', {
         state: { message: 'Registration successful! Please sign in.' },

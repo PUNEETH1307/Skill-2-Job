@@ -114,12 +114,20 @@ export default function Login() {
           </button>
         </form>
 
-        <p className="auth-footer">
-          Don&apos;t have an account?{' '}
-          <Link to="/register">
-            Register
-          </Link>
-        </p>
+        <div className="auth-links">
+          <p className="auth-footer">
+            Don&apos;t have an account?{' '}
+            <Link to="/register">
+              Register
+            </Link>
+          </p>
+          <p className="auth-footer">
+            Forgot your password?{' '}
+            <Link to="/forgot-password">
+              Reset Password
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

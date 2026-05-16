@@ -496,6 +496,13 @@ select.input {
   flex: 1;
 }
 
+.resume-upload-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-3);
+  align-items: center;
+}
+
 /* ---------- Entry Cards (Projects, Certs) ---------- */
 .entry-card {
   background: #f8fafc;
@@ -889,6 +896,10 @@ select.input {
     flex-direction: column;
   }
 
+  .resume-upload-row {
+    grid-template-columns: 1fr;
+  }
+
   .gap-item {
     flex-direction: column;
     align-items: flex-start;
@@ -911,4 +922,314 @@ select.input {
     align-items: flex-start;
     gap: var(--sp-3);
   }
+}
+
+/* ---------- Profile Choice Screen ---------- */
+.choice-container {
+  text-align: center;
+  padding: var(--sp-8) 0;
+}
+
+.choice-heading {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: var(--sp-2);
+  color: var(--text-primary, #1a1a2e);
+}
+
+.choice-description {
+  color: var(--text-secondary, #6b7280);
+  margin-bottom: var(--sp-8);
+}
+
+.choice-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-6);
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.choice-card {
+  background: var(--surface, #ffffff);
+  border: 2px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  padding: var(--sp-6);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  position: relative;
+}
+
+.choice-card:hover {
+  border-color: var(--primary, #4f46e5);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.15);
+  transform: translateY(-2px);
+}
+
+.choice-icon {
+  font-size: 2.5rem;
+  margin-bottom: var(--sp-3);
+}
+
+.choice-card h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: var(--sp-2);
+  color: var(--text-primary, #1a1a2e);
+}
+
+.choice-card p {
+  font-size: 0.9rem;
+  color: var(--text-secondary, #6b7280);
+  line-height: 1.5;
+}
+
+.choice-badge {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background: var(--primary, #4f46e5);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 12px;
+  text-transform: uppercase;
+}
+
+.upload-area {
+  border: 2px dashed var(--border, #e5e7eb);
+  border-radius: 8px;
+  padding: var(--sp-6);
+  text-align: center;
+  margin-bottom: var(--sp-4);
+}
+
+.upload-preview {
+  margin-top: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--surface-alt, #f9fafb);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 600px) {
+  .choice-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Skill Gap Analysis ---------- */
+.gap-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.gap-item {
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  padding: var(--sp-4);
+}
+
+.gap-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--sp-2);
+}
+
+.gap-skill-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-transform: capitalize;
+}
+
+.gap-importance-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: white;
+  padding: 3px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+}
+
+.gap-bar-container {
+  width: 100%;
+  height: 8px;
+  background: var(--surface-alt, #f3f4f6);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: var(--sp-1);
+}
+
+.gap-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.gap-score {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #6b7280);
+}
+
+/* ---------- Course Recommendations ---------- */
+.skill-courses-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+
+.skill-course-group {
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  padding: var(--sp-5);
+}
+
+.skill-course-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--sp-4);
+}
+
+.skill-course-skill-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: var(--text-primary, #1a1a2e);
+}
+
+.course-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: var(--sp-4);
+}
+
+.course-card {
+  background: var(--surface-alt, #f9fafb);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: box-shadow 0.2s ease;
+}
+
+.course-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.course-card-body {
+  margin-bottom: var(--sp-3);
+}
+
+.course-provider-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  margin-bottom: var(--sp-2);
+}
+
+.course-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary, #1a1a2e);
+  line-height: 1.4;
+}
+
+.course-link-btn {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--primary, #4f46e5);
+  text-decoration: none;
+  padding: var(--sp-2) 0;
+}
+
+.course-link-btn:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 600px) {
+  .course-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Analytics Visualizations ---------- */
+.skill-demand-bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.demand-bar-item {
+  display: grid;
+  grid-template-columns: 120px 1fr 40px;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.demand-skill-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-align: right;
+}
+
+.demand-bar-container {
+  height: 20px;
+  background: var(--surface-alt, #f3f4f6);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.demand-bar {
+  height: 100%;
+  background: var(--primary, #4f46e5);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.demand-count {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary, #6b7280);
+}
+
+/* Prediction bars */
+.prediction-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.prediction-bar-container {
+  flex: 1;
+  height: 12px;
+  background: var(--surface-alt, #f3f4f6);
+  border-radius: 6px;
+  overflow: hidden;
+  min-width: 80px;
+}
+
+.prediction-bar {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+.prediction-value {
+  font-size: 0.8rem;
+  font-weight: 600;
+  min-width: 40px;
 }

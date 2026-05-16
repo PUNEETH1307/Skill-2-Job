@@ -128,9 +128,47 @@ class TestLogin:
         assert resp.status_code == 400
 
 
-# ---------------------------------------------------------------------------
-# POST /api/auth/logout
-# ---------------------------------------------------------------------------
+class TestForgotPasswordAndReset:
+    """Tests for password reset request and reset endpoints."""
+
+    def test_forgot_password_returns_token(self, client):
+        _register_user(client)
+        resp = client.post(
+            "/api/auth/forgot-password",
+            json={"email": "test@example.com"},
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["message"]
+        assert data.get("reset_token") is not None
+
+    def test_reset_password_with_valid_token(self, client):
+        _register_user(client)
+        forgot_resp = client.post(
+            "/api/auth/forgot-password",
+            json={"email": "test@example.com"},
+        )
+        reset_token = forgot_resp.get_json()["reset_token"]
+
+        resp = client.post(
+            "/api/auth/reset-password",
+            json={"token": reset_token, "password": "newsecurepass123"},
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["message"] == "Password has been reset successfully"
+
+        login_resp = _login_user(client, password="newsecurepass123")
+        assert login_resp.status_code == 200
+
+    def test_reset_password_with_invalid_token(self, client):
+        resp = client.post(
+            "/api/auth/reset-password",
+            json={"token": "invalid-token", "password": "newsecurepass123"},
+        )
+        assert resp.status_code == 400
+        data = resp.get_json()
+        assert data["error"]["code"] == "VALIDATION_ERROR"
 
 
 class TestLogout:

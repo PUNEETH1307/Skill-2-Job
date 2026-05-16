@@ -8,6 +8,12 @@ class Config:
     JWT_TOKEN_EXPIRY_MINUTES = int(os.environ.get('JWT_TOKEN_EXPIRY_MINUTES', 30))
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SPACY_MODEL = os.environ.get('SPACY_MODEL', 'en_core_web_sm')
+    UPLOAD_FOLDER = os.environ.get(
+        'UPLOAD_FOLDER',
+        os.path.join(os.path.abspath(os.path.dirname(__file__)), 'uploads')
+    )
+    MAX_CONTENT_LENGTH = 5 * 1024 * 1024  # 5 MB upload limit
+    ALLOWED_RESUME_EXTENSIONS = {'pdf', 'docx'}
 
 
 class DevelopmentConfig(Config):

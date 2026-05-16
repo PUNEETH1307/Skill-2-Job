@@ -1,7 +1,7 @@
 """Unit tests for the StudentProfile service.
 
 Covers profile CRUD, validation, nested projects/certifications,
-and edge cases.
+dream_job/expected_lpa handling, and edge cases.
 """
 
 import json
@@ -375,3 +375,174 @@ class TestAddCertification:
 
         with pytest.raises(ValueError):
             profile_service.add_certification(profile.id, {"issuer": "No name"})
+
+
+# -----------------------------------------------------------------------
+# Validation: dream_job field
+# -----------------------------------------------------------------------
+
+class TestDreamJobValidation:
+    def test_dream_job_whitespace_stripped(self, app, db_session):
+        """Requirement 1.1: leading/trailing whitespace is stripped."""
+        user = _create_user(db_session)
+        data = _valid_profile_data(dream_job="  Full Stack Developer  ")
+
+        result = profile_service.create_or_update_profile(user.id, data)
+
+        assert result["dream_job"] == "Full Stack Developer"
+
+    def test_dream_job_max_length_enforced(self, app, db_session):
+        """Requirement 1.1: max 150 characters enforced (truncated)."""
+        user = _create_user(db_session)
+        long_job = "A" * 200
+        data = _valid_profile_data(dream_job=long_job)
+
+        result = profile_service.create_or_update_profile(user.id, data)
+
+        assert len(result["dream_job"]) == 150
+
+    def test_dream_job_exactly_150_chars_accepted(self, app, db_session):
+        """Boundary: exactly 150 characters is accepted without truncation."""
+        user = _create_user(db_session)
+        exact_job = "B" * 150
+        data = _valid_profile_data(dream_job=exact_job)
+
+        result = profile_service.create_or_update_profile(user.id, data)
+
+        assert result["dream_job"] == exact_job
+        assert len(result["dream_job"]) == 150
+
+    def test_dream_job_none_stores_none(self, app, db_session):
+        """dream_job can be explicitly set to None."""
+        user = _create_user(db_session)
+        data = _valid_profile_data(dream_job=None)
+
+        result = profile_service.create_or_update_profile(user.id, data)
+
+        assert result["dream_job"] is None
+
+    def test_dream_job_empty_string_stores_empty(self, app, db_session):
+        """dream_job can be set to empty string (stripped)."""
+        user = _create_user(db_session)
+        data = _valid_profile_data(dream_job="   ")
+
+        result = profile_service.create_or_update_profile(user.id, data)
+
+        # After stripping whitespace, empty string is stored
+        assert result["dream_job"] == ""
+
+    def test_omitting_dream_job_preserves_existing(self, app, db_session):
+        """Requirement 1.4: omitting dream_job does not overwrite existing value."""
+        user = _create_user(db_session)
+        # First, set dream_job
+        data = _valid_profile_data(dream_job="Data Scientist")
+        profile_service.create_or_update_profile(user.id, data)
+
+        # Update without dream_job key
+        update_data = _valid_profile_data()
+        # Ensure dream_job key is NOT in the update payload
+        update_data.pop("dream_job", None)
+        result = profile_service.create_or_update_profile(user.id, update_data)
+
+        assert result["dream_job"] == "Data Scientist"
+
+
+# -----------------------------------------------------------------------
+# Validation: expected_lpa field
+# -----------------------------------------------------------------------
+
+class TestExpectedLpaValidation:
+    def test_expected_lpa_valid_value_accepted(self, app, db_session):
+        """Requirement 1.2: valid float in [0.0, 100.0] is accepted."""
+        user = _create_user(db_session)
+        data = _valid_profile_data(expected_lpa=8.5)
+
+        result = profile_service.create_or_update_profile(user.id, data)
+
+        assert result["expected_lpa"] == 8.5
+
+    def test_expected_lpa_zero_accepted(self, app, db_session):
+        """Boundary: 0.0 is valid."""
+        user = _create_user(db_session)
+        data = _valid_profile_data(expected_lpa=0.0)
+
+        result = profile_service.create_or_update_profile(user.id, data)
+
+        assert result["expected_lpa"] == 0.0
+
+    def test_expected_lpa_hundred_accepted(self, app, db_session):
+        """Boundary: 100.0 is valid."""
+        user = _create_user(db_session)
+        data = _valid_profile_data(expected_lpa=100.0)
+
+        result = profile_service.create_or_update_profile(user.id, data)
+
+        assert result["expected_lpa"] == 100.0
+
+    def test_expected_lpa_negative_rejected(self, app, db_session):
+        """Requirement 1.3: negative value rejected with field-level error."""
+        user = _create_user(db_session)
+        data = _valid_profile_data(expected_lpa=-1.0)
+
+        with pytest.raises(ValueError) as exc_info:
+            profile_service.create_or_update_profile(user.id, data)
+
+        errors = exc_info.value.args[0]
+        assert isinstance(errors, dict)
+        assert "expected_lpa" in errors
+
+    def test_expected_lpa_above_hundred_rejected(self, app, db_session):
+        """Requirement 1.3: value > 100.0 rejected with field-level error."""
+        user = _create_user(db_session)
+        data = _valid_profile_data(expected_lpa=100.1)
+
+        with pytest.raises(ValueError) as exc_info:
+            profile_service.create_or_update_profile(user.id, data)
+
+        errors = exc_info.value.args[0]
+        assert isinstance(errors, dict)
+        assert "expected_lpa" in errors
+
+    def test_expected_lpa_non_numeric_rejected(self, app, db_session):
+        """Requirement 1.2: non-numeric value rejected with field-level error."""
+        user = _create_user(db_session)
+        data = _valid_profile_data(expected_lpa="not-a-number")
+
+        with pytest.raises(ValueError) as exc_info:
+            profile_service.create_or_update_profile(user.id, data)
+
+        errors = exc_info.value.args[0]
+        assert isinstance(errors, dict)
+        assert "expected_lpa" in errors
+
+    def test_expected_lpa_none_stores_none(self, app, db_session):
+        """expected_lpa can be explicitly set to None."""
+        user = _create_user(db_session)
+        data = _valid_profile_data(expected_lpa=None)
+
+        result = profile_service.create_or_update_profile(user.id, data)
+
+        assert result["expected_lpa"] is None
+
+    def test_omitting_expected_lpa_preserves_existing(self, app, db_session):
+        """Requirement 1.4: omitting expected_lpa does not overwrite existing value."""
+        user = _create_user(db_session)
+        # First, set expected_lpa
+        data = _valid_profile_data(expected_lpa=12.0)
+        profile_service.create_or_update_profile(user.id, data)
+
+        # Update without expected_lpa key
+        update_data = _valid_profile_data()
+        update_data.pop("expected_lpa", None)
+        result = profile_service.create_or_update_profile(user.id, update_data)
+
+        assert result["expected_lpa"] == 12.0
+
+    def test_expected_lpa_string_numeric_accepted(self, app, db_session):
+        """String that can be converted to float is accepted."""
+        user = _create_user(db_session)
+        data = _valid_profile_data(expected_lpa="15.5")
+
+        result = profile_service.create_or_update_profile(user.id, data)
+
+        assert result["expected_lpa"] == 15.5

@@ -1,0 +1,60 @@
+# Skill2Job - Docker Compose for local development and production
+version: '3.8'
+
+services:
+  # MySQL Database
+  db:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-skill2job_root}
+      MYSQL_DATABASE: skill2job
+      MYSQL_USER: skill2job_user
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-skill2job_pass}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Flask Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      FLASK_CONFIG: production
+      DATABASE_URL: mysql+pymysql://skill2job_user:${MYSQL_PASSWORD:-skill2job_pass}@db:3306/skill2job
+      SECRET_KEY: ${SECRET_KEY:-change-this-in-production}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-this-jwt-secret}
+      JWT_TOKEN_EXPIRY_MINUTES: 60
+      SPACY_MODEL: en_core_web_sm
+      UPLOAD_FOLDER: /app/uploads
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+
+  # React Frontend (production build served by nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
+  uploads_data:

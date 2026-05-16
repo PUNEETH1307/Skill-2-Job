@@ -1,4 +1,4 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { AxiosError } from 'axios';
@@ -21,6 +21,8 @@ interface ProfileData {
   branch: string;
   cgpa: string;
   graduation_year: string;
+  dream_job: string;
+  expected_lpa: string;
   skills: string[];
   projects: ProjectEntry[];
   certifications: CertificationEntry[];
@@ -32,19 +34,26 @@ interface FieldErrors {
   branch?: string;
   cgpa?: string;
   graduation_year?: string;
+  dream_job?: string;
+  expected_lpa?: string;
   general?: string;
 }
+
+type ProfileMode = 'choose' | 'upload' | 'manual' | 'form';
 
 const emptyProject: ProjectEntry = { title: '', description: '', technologies: '' };
 const emptyCert: CertificationEntry = { name: '', issuer: '', issue_date: '' };
 
 export default function Profile() {
+  const [mode, setMode] = useState<ProfileMode>('choose');
   const [form, setForm] = useState<ProfileData>({
     institution: '',
     degree: '',
     branch: '',
     cgpa: '',
     graduation_year: '',
+    dream_job: '',
+    expected_lpa: '',
     skills: [],
     projects: [],
     certifications: [],
@@ -53,8 +62,11 @@ export default function Profile() {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [resumeUploading, setResumeUploading] = useState(false);
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [successMsg, setSuccessMsg] = useState('');
   const [fetchError, setFetchError] = useState('');
+  const [hasExistingProfile, setHasExistingProfile] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -67,13 +79,18 @@ export default function Profile() {
           branch: d.branch ?? '',
           cgpa: d.cgpa != null ? String(d.cgpa) : '',
           graduation_year: d.graduation_year != null ? String(d.graduation_year) : '',
-          skills: Array.isArray(d.skills) ? d.skills : [],
+          dream_job: d.dream_job ?? '',
+          expected_lpa: d.expected_lpa != null ? String(d.expected_lpa) : '',
+          skills: Array.isArray(d.skills_json) ? d.skills_json : (d.skills_json ? tryParseSkills(d.skills_json) : []),
           projects: Array.isArray(d.projects) ? d.projects : [],
           certifications: Array.isArray(d.certifications) ? d.certifications : [],
         });
+        setHasExistingProfile(true);
+        setMode('form'); // Already has profile, go straight to form
       } catch (err) {
         if (err instanceof AxiosError && err.response?.status === 404) {
-          // No profile yet — keep defaults
+          // No profile yet — show choice screen
+          setMode('choose');
         } else {
           setFetchError('Failed to load profile. Please try again.');
         }
@@ -81,8 +98,18 @@ export default function Profile() {
         setLoading(false);
       }
     };
+
     fetchProfile();
   }, []);
+
+  const tryParseSkills = (raw: string): string[] => {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
 
   const validate = (): boolean => {
     const e: FieldErrors = {};
@@ -99,6 +126,17 @@ export default function Profile() {
 
     if (!form.graduation_year.trim()) {
       e.graduation_year = 'Graduation year is required.';
+    }
+
+    if (form.dream_job.length > 150) {
+      e.dream_job = 'Dream job must be at most 150 characters.';
+    }
+
+    if (form.expected_lpa.trim()) {
+      const lpaNum = parseFloat(form.expected_lpa);
+      if (isNaN(lpaNum) || lpaNum < 0.0 || lpaNum > 100.0) {
+        e.expected_lpa = 'Expected LPA must be between 0.0 and 100.0.';
+      }
     }
 
     setErrors(e);
@@ -119,11 +157,14 @@ export default function Profile() {
         branch: form.branch,
         cgpa: parseFloat(form.cgpa),
         graduation_year: parseInt(form.graduation_year, 10),
+        dream_job: form.dream_job || null,
+        expected_lpa: form.expected_lpa.trim() ? parseFloat(form.expected_lpa) : null,
         skills: form.skills,
         projects: form.projects,
         certifications: form.certifications,
       });
       setSuccessMsg('Profile saved successfully!');
+      setHasExistingProfile(true);
     } catch (err) {
       if (err instanceof AxiosError && err.response) {
         const apiErr = err.response.data?.error;
@@ -133,6 +174,54 @@ export default function Profile() {
       }
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleResumeUploadAndParse = async () => {
+    if (!resumeFile) {
+      setErrors({ general: 'Please select a resume file.' });
+      return;
+    }
+
+    setResumeUploading(true);
+    setErrors({});
+    setSuccessMsg('');
+
+    try {
+      const formData = new FormData();
+      formData.append('resume', resumeFile);
+
+      const res = await api.post('/resume/parse-for-profile', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      const extracted = res.data.extracted_profile;
+
+      // Pre-fill the form with extracted data
+      setForm({
+        institution: extracted.institution || '',
+        degree: extracted.degree || '',
+        branch: extracted.branch || '',
+        cgpa: extracted.cgpa != null ? String(extracted.cgpa) : '',
+        graduation_year: extracted.graduation_year != null ? String(extracted.graduation_year) : '',
+        dream_job: '',
+        expected_lpa: '',
+        skills: Array.isArray(extracted.skills) ? extracted.skills : [],
+        projects: Array.isArray(extracted.projects) ? extracted.projects : [],
+        certifications: Array.isArray(extracted.certifications) ? extracted.certifications : [],
+      });
+
+      setSuccessMsg('Resume parsed successfully! Review and complete your profile below.');
+      setMode('form');
+    } catch (err) {
+      if (err instanceof AxiosError && err.response) {
+        const apiErr = err.response.data?.error;
+        setErrors({ general: apiErr?.message ?? 'Failed to parse resume.' });
+      } else {
+        setErrors({ general: 'Unable to connect to the server.' });
+      }
+    } finally {
+      setResumeUploading(false);
     }
   };
 
@@ -174,6 +263,7 @@ export default function Profile() {
     setForm({ ...form, certifications: form.certifications.filter((_, i) => i !== idx) });
   };
 
+  // ---- Loading state ----
   if (loading) {
     return (
       <div className="page-container">
@@ -191,6 +281,91 @@ export default function Profile() {
     );
   }
 
+  // ---- Choice Screen ----
+  if (mode === 'choose') {
+    return (
+      <div className="page-container">
+        <div className="page-header">
+          <h1 className="page-title">Create Your Profile</h1>
+          <Link to="/student/dashboard" className="back-link">Back to Dashboard</Link>
+        </div>
+
+        <div className="choice-container">
+          <h2 className="choice-heading">How would you like to set up your profile?</h2>
+          <p className="choice-description">
+            Choose one of the options below to get started.
+          </p>
+
+          <div className="choice-cards">
+            <div className="choice-card" onClick={() => setMode('upload')}>
+              <div className="choice-icon">📄</div>
+              <h3>Upload Resume</h3>
+              <p>Upload your existing resume (PDF/DOCX) and we'll automatically extract your details using AI.</p>
+              <span className="choice-badge">Recommended</span>
+            </div>
+
+            <div className="choice-card" onClick={() => setMode('manual')}>
+              <div className="choice-icon">✏️</div>
+              <h3>Fill Manually</h3>
+              <p>Enter your academic details, skills, projects, and certifications manually.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- Upload Resume Screen ----
+  if (mode === 'upload') {
+    return (
+      <div className="page-container">
+        <div className="page-header">
+          <h1 className="page-title">Upload Your Resume</h1>
+          <button className="back-link" onClick={() => setMode('choose')}>← Back to Options</button>
+        </div>
+
+        {errors.general && <div className="alert alert-error">{errors.general}</div>}
+        {successMsg && <div className="alert alert-success">{successMsg}</div>}
+
+        <div className="page-section">
+          <p className="helper-text">
+            Upload your resume in PDF or DOCX format. Our AI will extract your skills, education,
+            projects, and certifications to auto-fill your profile.
+          </p>
+
+          <div className="upload-area">
+            <input
+              type="file"
+              accept=".pdf,.docx"
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setResumeFile(e.target.files?.[0] ?? null)}
+              className="input"
+              id="resume-upload"
+            />
+            {resumeFile && (
+              <div className="upload-preview">
+                <strong>Selected:</strong> {resumeFile.name} ({(resumeFile.size / 1024).toFixed(1)} KB)
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={handleResumeUploadAndParse}
+            disabled={resumeUploading || !resumeFile}
+            className="btn btn-success btn-block mt-1"
+          >
+            {resumeUploading ? 'Parsing Resume...' : 'Upload & Extract Profile'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- Manual mode: go straight to form without resume upload ----
+  if (mode === 'manual' && !hasExistingProfile) {
+    setMode('form');
+  }
+
+  // ---- Profile Form (both after upload extraction and manual entry) ----
   return (
     <div className="page-container">
       <div className="page-header">
@@ -245,6 +420,35 @@ export default function Profile() {
                 className={`input${errors.graduation_year ? ' input-error' : ''}`} />
               {errors.graduation_year && <span className="field-error">{errors.graduation_year}</span>}
             </div>
+          </div>
+        </div>
+
+        {/* Career Goals */}
+        <div className="page-section">
+          <h2 className="section-title">Career Goals</h2>
+          <p className="helper-text">
+            Set your dream job and expected salary to get an AI-enhanced, tailored resume.
+          </p>
+
+          <div className="field">
+            <label htmlFor="dream_job" className="label">Dream Job</label>
+            <input id="dream_job" type="text" value={form.dream_job}
+              maxLength={150}
+              placeholder="e.g., Full Stack Developer, Data Scientist"
+              onChange={(e) => setForm({ ...form, dream_job: e.target.value })}
+              className={`input${errors.dream_job ? ' input-error' : ''}`} />
+            {errors.dream_job && <span className="field-error">{errors.dream_job}</span>}
+            <span className="helper-text">{form.dream_job.length}/150 characters</span>
+          </div>
+
+          <div className="field">
+            <label htmlFor="expected_lpa" className="label">Expected LPA (0.0 - 100.0)</label>
+            <input id="expected_lpa" type="number" step="0.1" min="0" max="100"
+              value={form.expected_lpa}
+              placeholder="e.g., 8.5"
+              onChange={(e) => setForm({ ...form, expected_lpa: e.target.value })}
+              className={`input${errors.expected_lpa ? ' input-error' : ''}`} />
+            {errors.expected_lpa && <span className="field-error">{errors.expected_lpa}</span>}
           </div>
         </div>
 

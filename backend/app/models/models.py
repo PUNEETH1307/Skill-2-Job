@@ -74,6 +74,8 @@ class StudentProfile(db.Model):
     graduation_year = db.Column(db.Integer, nullable=True)
     skills_json = db.Column(db.Text, nullable=True)
     skill_vector_json = db.Column(db.Text, nullable=True)
+    dream_job = db.Column(db.String(150), nullable=True)
+    expected_lpa = db.Column(db.Float, nullable=True)
     updated_at = db.Column(
         db.DateTime,
         nullable=False,
@@ -87,6 +89,7 @@ class StudentProfile(db.Model):
     certifications = db.relationship("Certification", back_populates="profile", cascade="all, delete-orphan")
     shortlists = db.relationship("Shortlist", back_populates="profile", cascade="all, delete-orphan")
     placement_records = db.relationship("PlacementRecord", back_populates="profile", cascade="all, delete-orphan")
+    resume_uploads = db.relationship("ResumeUpload", back_populates="profile", cascade="all, delete-orphan")
 
     __table_args__ = (
         db.Index("idx_profile_user_id", "user_id"),
@@ -106,6 +109,8 @@ class StudentProfile(db.Model):
             "graduation_year": self.graduation_year,
             "skills_json": self.skills_json,
             "skill_vector_json": self.skill_vector_json,
+            "dream_job": self.dream_job,
+            "expected_lpa": self.expected_lpa,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "projects": [p.to_dict() for p in self.projects],
             "certifications": [c.to_dict() for c in self.certifications],
@@ -423,4 +428,69 @@ class PlacementRecord(db.Model):
             "company_id": self.company_id,
             "placement_date": self.placement_date.isoformat() if self.placement_date else None,
             "department": self.department,
+        }
+
+
+# ---------------------------------------------------------------------------
+# ResumeUpload
+# ---------------------------------------------------------------------------
+
+class ResumeUpload(db.Model):
+    """Metadata for a resume file uploaded by a student."""
+
+    __tablename__ = "resume_upload"
+
+    id = db.Column(db.Integer, primary_key=True)
+    profile_id = db.Column(db.Integer, db.ForeignKey("student_profile.id"), nullable=False)
+    original_filename = db.Column(db.String(255), nullable=False)
+    stored_filename = db.Column(db.String(255), nullable=False)
+    content_type = db.Column(db.String(100), nullable=False)
+    uploaded_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    profile = db.relationship("StudentProfile", back_populates="resume_uploads")
+
+    def __repr__(self):
+        return f"<ResumeUpload id={self.id} filename={self.original_filename!r}>"
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "profile_id": self.profile_id,
+            "original_filename": self.original_filename,
+            "stored_filename": self.stored_filename,
+            "content_type": self.content_type,
+            "uploaded_at": self.uploaded_at.isoformat() if self.uploaded_at else None,
+        }
+
+
+# ---------------------------------------------------------------------------
+# PasswordResetToken
+# ---------------------------------------------------------------------------
+
+class PasswordResetToken(db.Model):
+    """Temporary password reset tokens for users."""
+
+    __tablename__ = "password_reset_token"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    token_hash = db.Column(db.String(128), nullable=False, unique=True)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used = db.Column(db.Boolean, nullable=False, default=False)
+
+    user = db.relationship("User")
+
+    __table_args__ = (
+        db.Index("idx_password_reset_token_hash", "token_hash", unique=True),
+    )
+
+    def __repr__(self):
+        return f"<PasswordResetToken id={self.id} user_id={self.user_id} used={self.used}>"
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "used": self.used,
         }

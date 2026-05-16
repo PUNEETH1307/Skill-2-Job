@@ -1,0 +1,41 @@
+# Render Blueprint - Skill2Job Deployment
+# https://render.com/docs/blueprint-spec
+
+services:
+  # Flask Backend
+  - type: web
+    name: skill2job-backend
+    runtime: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: |
+      pip install -r requirements.txt &&
+      pip install gunicorn &&
+      python -m spacy download en_core_web_sm
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 run:app
+    envVars:
+      - key: FLASK_CONFIG
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: skill2job-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: JWT_TOKEN_EXPIRY_MINUTES
+        value: 60
+      - key: SPACY_MODEL
+        value: en_core_web_sm
+      - key: PYTHON_VERSION
+        value: 3.12.3
+    healthCheckPath: /api/auth/login
+
+databases:
+  - name: skill2job-db
+    plan: free
+    region: oregon
+    databaseName: skill2job
+    user: skill2job_user

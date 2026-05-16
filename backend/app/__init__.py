@@ -40,6 +40,11 @@ def create_app(config_name='default'):
     db.init_app(app)
     migrate.init_app(app, db)
 
+    # Ensure upload folder exists when the application starts
+    upload_folder = app.config.get('UPLOAD_FOLDER')
+    if upload_folder:
+        os.makedirs(upload_folder, exist_ok=True)
+
     # CORS: in development the React dev server runs on a separate port
     # (e.g. 3000) so we need permissive origins.  In production the SPA
     # is served from the same origin so CORS headers are harmless.

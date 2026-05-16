@@ -121,6 +121,7 @@ class TestGenerateResume:
         data = resp.get_json()
         assert data["error"]["code"] == "VALIDATION_ERROR"
         assert "missing" in data["error"]["message"].lower()
+        assert data["error"]["fields"]["missing_fields"] == ["skills"]
 
     def test_generate_resume_no_profile_returns_400(self, client):
         """POST /api/resume/generate with no profile at all returns 400."""

@@ -602,6 +602,24 @@ def create_shortlist(id):
 
     db.session.commit()
 
+    # Send email notifications to shortlisted students
+    from app.services.email_service import get_email_service
+    email_svc = get_email_service()
+    for record in created_records:
+        try:
+            profile = db.session.get(StudentProfile, record.profile_id)
+            if profile:
+                user = db.session.get(User, profile.user_id)
+                if user and user.email:
+                    email_svc.send_shortlist_notification(
+                        to_email=user.email,
+                        user_name=user.name,
+                        job_title=job_role.title,
+                        company_name=db.session.get(Company, job_role.company_id).name if job_role.company_id else "Unknown",
+                    )
+        except Exception:
+            pass  # Don't fail shortlisting if email fails
+
     return jsonify([r.to_dict() for r in created_records]), 201
 
 
@@ -1195,3 +1213,65 @@ def create_course():
     db.session.commit()
 
     return jsonify(course.to_dict()), 201
+
+# ---------------------------------------------------------------------------
+# Placement Prediction routes (Random Forest ML)
+# ---------------------------------------------------------------------------
+
+
+@admin_bp.route("/predictions/train", methods=["POST"])
+@jwt_required
+@role_required("placement_officer")
+def train_prediction_model():
+    """Train the placement success prediction model.
+
+    Uses Random Forest on historical placement data.
+
+    Returns:
+        200: Training stats (samples, accuracy, feature importances).
+    """
+    from app.services.placement_predictor import get_predictor
+
+    predictor = get_predictor()
+    result = predictor.train()
+    return jsonify(result), 200
+
+
+@admin_bp.route("/predictions/student/<int:student_id>", methods=["GET"])
+@jwt_required
+@role_required("placement_officer")
+def predict_student_placement(student_id):
+    """Predict placement probability for a specific student.
+
+    Returns:
+        200: Probability (0-100), confidence level, contributing factors.
+        404: Student not found.
+    """
+    from app.services.placement_predictor import get_predictor
+
+    predictor = get_predictor()
+    result = predictor.predict(student_id)
+
+    if "error" in result:
+        return (
+            jsonify({"error": {"code": "NOT_FOUND", "message": result["error"]}}),
+            404,
+        )
+
+    return jsonify(result), 200
+
+
+@admin_bp.route("/predictions/batch", methods=["GET"])
+@jwt_required
+@role_required("placement_officer")
+def predict_batch_placement():
+    """Predict placement probability for all students (candidate ranking).
+
+    Returns:
+        200: List of students ranked by placement probability.
+    """
+    from app.services.placement_predictor import get_predictor
+
+    predictor = get_predictor()
+    results = predictor.predict_batch()
+    return jsonify({"predictions": results}), 200

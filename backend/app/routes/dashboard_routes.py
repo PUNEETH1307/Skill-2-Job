@@ -123,3 +123,23 @@ def get_admin_dashboard():
             ),
             500,
         )
+
+
+@dashboard_bp.route("/student/prediction", methods=["GET"])
+@jwt_required
+@role_required("student")
+def get_student_prediction():
+    """Get placement success prediction for the authenticated student.
+
+    Uses Random Forest model (or heuristic fallback) to predict
+    placement probability based on profile features.
+
+    Returns:
+        200: JSON with probability, confidence, and contributing factors.
+    """
+    from app.services.placement_predictor import get_predictor
+
+    user_id = g.current_user["user_id"]
+    predictor = get_predictor()
+    result = predictor.predict(user_id)
+    return jsonify(result), 200

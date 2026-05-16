@@ -4,6 +4,8 @@ Provides user registration, login, logout, token validation, and
 role-based permission checking.
 """
 
+import hashlib
+import secrets
 import re
 from datetime import datetime, timezone, timedelta
 
@@ -12,7 +14,7 @@ import jwt
 from flask import current_app
 
 from app import db
-from app.models import User
+from app.models import PasswordResetToken, User
 
 # Module-level token blacklist (in-memory set for simplicity)
 _token_blacklist: set[str] = set()
@@ -137,6 +139,93 @@ class AuthModule:
                 "role": user.role,
             },
         }
+
+    # ------------------------------------------------------------------
+    # Password reset
+    # ------------------------------------------------------------------
+
+    def request_password_reset(self, email: str) -> dict:
+        """Create a password reset token for a user.
+
+        Args:
+            email: Registered email address.
+
+        Returns:
+            dict containing a reset token and message. In production,
+            this token should be emailed to the user rather than returned.
+
+        Raises:
+            ValueError: If no user exists with the given email.
+        """
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            raise ValueError("If that email exists, a reset link will be sent")
+
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+        expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+
+        reset_token = PasswordResetToken(
+            user_id=user.id,
+            token_hash=token_hash,
+            expires_at=expiry,
+            used=False,
+        )
+        db.session.add(reset_token)
+        db.session.commit()
+
+        # In a real deployment the token would be delivered via email.
+        # Send password reset email
+        from app.services.email_service import get_email_service
+        email_svc = get_email_service()
+        email_svc.send_password_reset(email, raw_token, user.name)
+
+        return {
+            "message": "Password reset token created. Please check your email.",
+            "reset_token": raw_token,
+        }
+
+    def reset_password(self, token: str, password: str) -> dict:
+        """Reset the user's password using a valid reset token.
+
+        Args:
+            token: Password reset token previously issued.
+            password: New plain-text password.
+
+        Returns:
+            dict with confirmation message.
+
+        Raises:
+            ValueError: If the token is invalid, expired, used, or password invalid.
+        """
+        if len(password) < 8:
+            raise ValueError("Password must be at least 8 characters")
+
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        reset_record = PasswordResetToken.query.filter_by(token_hash=token_hash).first()
+        if reset_record is None:
+            raise ValueError("Invalid password reset token")
+        if reset_record.used:
+            raise ValueError("Password reset token has already been used")
+        expires_at = reset_record.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < datetime.now(timezone.utc):
+            raise ValueError("Password reset token has expired")
+
+        user = db.session.get(User, reset_record.user_id)
+        if user is None:
+            raise ValueError("User not found")
+
+        user.password_hash = bcrypt.hashpw(
+            password.encode("utf-8"), bcrypt.gensalt()
+        ).decode("utf-8")
+        reset_record.used = True
+        db.session.add(user)
+        db.session.add(reset_record)
+        db.session.commit()
+
+        return {"message": "Password has been reset successfully"}
 
     # ------------------------------------------------------------------
     # Logout

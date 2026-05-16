@@ -1,346 +1,352 @@
 /* ============================================
    Skill2Job — Dashboard Styles
+   Covers Student, Admin, and Coordinator dashboards
    ============================================ */
 
-/* Page wrapper */
+/* ---------- Dashboard Container ---------- */
 .dash-container {
-  padding: var(--sp-8);
-  max-width: 960px;
+  max-width: 1100px;
   margin: 0 auto;
+  padding: var(--sp-8);
+  animation: fadeIn 0.4s ease;
 }
 
-/* Header bar */
+/* ---------- Dashboard Header ---------- */
 .dash-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: var(--sp-4);
 }
 
 .dash-title {
-  margin: 0;
-  font-size: 1.75rem;
-  color: var(--primary);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
-/* Logout button */
+.dash-welcome {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-8);
+}
+
 .dash-logout-btn {
-  padding: 0.45rem 1.1rem;
-  font-size: 0.875rem;
+  padding: 0.5rem 1.2rem;
+  font-size: 0.85rem;
   font-weight: 500;
-  color: #fff;
-  background: var(--danger);
-  border: none;
-  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   cursor: pointer;
-  transition: background var(--transition), transform var(--transition), box-shadow var(--transition);
+  transition: all var(--transition);
 }
 
 .dash-logout-btn:hover {
-  background: var(--danger-dark);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(231, 76, 60, 0.3);
+  background: var(--danger-light);
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
-/* Welcome banner */
-.dash-welcome {
-  color: var(--text-light);
+/* ---------- Dashboard Sections ---------- */
+.dash-section {
   margin-bottom: var(--sp-8);
-  font-size: 1rem;
-  padding: var(--sp-4) var(--sp-6);
-  background: linear-gradient(135deg, rgba(30, 58, 95, 0.04) 0%, rgba(0, 188, 212, 0.06) 100%);
-  border-radius: var(--radius);
-  border-left: 4px solid var(--accent);
+  animation: slideUp 0.4s ease forwards;
 }
 
-/* Navigation card grid */
+.dash-section h2 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--sp-4);
+  padding-bottom: var(--sp-2);
+  border-bottom: 2px solid var(--primary-100);
+}
+
+/* ---------- Dashboard Grid ---------- */
 .dash-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: var(--sp-6);
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--sp-4);
+  list-style: none;
+  padding: 0;
 }
 
-/* Navigation card */
+/* ---------- Dashboard Cards ---------- */
 .dash-card {
-  display: block;
-  background: var(--bg-card);
-  padding: var(--sp-6);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
+  padding: var(--sp-5);
+  transition: all var(--transition);
   text-decoration: none;
-  color: inherit;
-  border-left: 4px solid var(--accent);
-  transition: transform var(--transition), box-shadow var(--transition);
+  color: var(--text);
+  display: block;
   position: relative;
   overflow: hidden;
 }
 
-.dash-card::after {
+.dash-card::before {
   content: '';
   position: absolute;
   top: 0;
+  left: 0;
   right: 0;
-  width: 80px;
-  height: 80px;
-  background: linear-gradient(135deg, transparent 40%, rgba(0, 188, 212, 0.05) 100%);
-  border-radius: 0 0 0 80px;
-  pointer-events: none;
+  height: 3px;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  opacity: 0;
+  transition: opacity var(--transition);
 }
 
 .dash-card:hover {
   transform: translateY(-3px);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary-200);
+}
+
+.dash-card:hover::before {
+  opacity: 1;
+}
+
+.dash-card-highlight {
+  border-color: var(--primary-200);
+  background: var(--primary-50);
+}
+
+.dash-card-highlight::before {
+  opacity: 1;
 }
 
 .dash-card-title {
-  margin: 0 0 var(--sp-2);
-  font-size: 1.1rem;
-  color: var(--primary-light);
+  font-size: 1rem;
   font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--sp-2);
 }
 
 .dash-card-desc {
-  margin: 0;
-  font-size: 0.9rem;
-  color: var(--text-light);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
   line-height: 1.5;
+  margin: 0;
 }
 
-/* Admin-only card variant */
-.dash-card-admin {
-  display: block;
-  background: var(--bg-card);
-  padding: var(--sp-6);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
-  text-decoration: none;
-  color: inherit;
-  border-left: 4px solid var(--warning);
-  transition: transform var(--transition), box-shadow var(--transition);
-  position: relative;
-  overflow: hidden;
-}
-
-.dash-card-admin::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 80px;
-  height: 80px;
-  background: linear-gradient(135deg, transparent 40%, rgba(243, 156, 18, 0.06) 100%);
-  border-radius: 0 0 0 80px;
-  pointer-events: none;
-}
-
-.dash-card-admin:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-lg);
-}
-
-/* Admin badge */
-.dash-admin-badge {
-  display: inline-block;
-  margin-top: var(--sp-3);
-  padding: 0.2rem 0.6rem;
-  background: linear-gradient(135deg, #fff8e1, #fff3cd);
-  color: #856404;
-  border-radius: var(--radius-sm);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-/* ============================================
-   Summary Card — Metric Display
-   ============================================ */
-
+/* ---------- Summary Cards ---------- */
 .dash-summary-card {
   text-align: center;
-  padding: var(--sp-6) var(--sp-4);
-  border-left: 4px solid var(--accent);
+  padding: var(--sp-6);
 }
 
 .dash-summary-card-label {
-  margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 500;
-  color: var(--text-light);
+  color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
+  margin-bottom: var(--sp-2);
 }
 
 .dash-summary-card-value {
-  margin: var(--sp-2) 0 0;
   font-size: 2rem;
   font-weight: 700;
   color: var(--primary);
+  margin: 0;
   line-height: 1.2;
 }
 
-/* Highlight variant — accent/warning emphasis */
-.dash-card-highlight {
-  border-left-color: var(--warning);
-  background: linear-gradient(135deg, rgba(243, 156, 18, 0.03) 0%, rgba(243, 156, 18, 0.07) 100%);
-}
-
-.dash-card-highlight .dash-summary-card-value {
-  color: var(--warning-dark);
-}
-
-/* ============================================
-   Loading State
-   ============================================ */
-
+/* ---------- Loading & Error States ---------- */
 .dash-loading {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--sp-4);
-  padding: var(--sp-12) var(--sp-8);
-  color: var(--text-light);
-  font-size: 0.95rem;
+  padding: var(--sp-16);
+  color: var(--text-secondary);
+  font-size: 1rem;
 }
 
 .dash-loading::before {
   content: '';
   display: inline-block;
-  width: 36px;
-  height: 36px;
+  width: 24px;
+  height: 24px;
   border: 3px solid var(--border);
-  border-top-color: var(--accent);
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
+  margin-right: var(--sp-3);
 }
-
-/* ============================================
-   Error State
-   ============================================ */
 
 .dash-error {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sp-4);
-  padding: var(--sp-10) var(--sp-8);
+  background: var(--danger-light);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius);
+  padding: var(--sp-5);
   text-align: center;
-  color: var(--danger);
-  background: rgba(231, 76, 60, 0.04);
-  border-radius: var(--radius-lg);
-  border: 1px solid rgba(231, 76, 60, 0.15);
-}
-
-.dash-error p {
-  margin: 0;
-  font-size: 0.95rem;
-  color: var(--text);
+  color: var(--danger-dark);
 }
 
 .dash-error button {
+  margin-top: var(--sp-3);
   padding: 0.5rem 1.2rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #fff;
-  background: var(--accent);
+  background: var(--danger);
+  color: white;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   cursor: pointer;
-  transition: background var(--transition), transform var(--transition);
+  font-weight: 500;
+  transition: background var(--transition);
 }
 
 .dash-error button:hover {
-  background: var(--accent-dark);
-  transform: translateY(-1px);
+  background: var(--danger-dark);
 }
 
-/* ============================================
-   Empty State
-   ============================================ */
-
+/* ---------- Empty State ---------- */
 .dash-empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-8) var(--sp-6);
-  text-align: center;
-  color: var(--text-light);
-  background: rgba(0, 188, 212, 0.03);
-  border-radius: var(--radius);
+  background: var(--surface-alt);
   border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: var(--sp-6);
+  text-align: center;
+  color: var(--text-secondary);
 }
 
 .dash-empty-state p {
-  margin: 0;
-  font-size: 0.9rem;
-  line-height: 1.5;
+  margin-bottom: var(--sp-3);
 }
 
-/* ============================================
-   Dashboard Sections
-   ============================================ */
-
-.dash-section {
-  margin-top: var(--sp-8);
+.dash-empty-state a,
+.dash-empty-state .dash-card {
+  display: inline-block;
+  background: var(--primary);
+  color: white;
+  padding: 0.6rem 1.5rem;
+  border-radius: var(--radius);
+  font-weight: 500;
+  text-decoration: none;
+  transition: all var(--transition);
 }
 
-.dash-section h2 {
-  margin: 0 0 var(--sp-4);
-  font-size: 1.15rem;
-  font-weight: 600;
-  color: var(--primary);
+.dash-empty-state a:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
 }
 
-/* Metrics row — horizontal card layout */
-.dash-section .dash-grid {
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-}
-
-/* ============================================
-   Recent Shortlists Table
-   ============================================ */
-
+/* ---------- Recent Table (Admin/Coordinator) ---------- */
 .dash-recent-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
-  background: var(--bg-card);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
-  box-shadow: var(--shadow);
-}
-
-.dash-recent-table thead {
-  background: var(--primary);
-  color: #fff;
-}
-
-.dash-recent-table th,
-.dash-recent-table td {
-  padding: var(--sp-3) var(--sp-4);
-  text-align: left;
 }
 
 .dash-recent-table th {
+  background: var(--surface-alt);
+  padding: 0.75rem 1rem;
+  text-align: left;
   font-weight: 600;
+  color: var(--text-secondary);
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-}
-
-.dash-recent-table tbody tr {
-  border-bottom: 1px solid var(--border-light);
-  transition: background var(--transition);
-}
-
-.dash-recent-table tbody tr:last-child {
-  border-bottom: none;
-}
-
-.dash-recent-table tbody tr:hover {
-  background: rgba(0, 188, 212, 0.04);
+  border-bottom: 1px solid var(--border);
 }
 
 .dash-recent-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-light);
   color: var(--text);
+}
+
+.dash-recent-table tbody tr:hover {
+  background: var(--surface-alt);
+}
+
+.dash-recent-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ---------- Admin Specific ---------- */
+.dash-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--sp-4);
+}
+
+.dash-nav-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+}
+
+.dash-nav-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0.6rem 1.2rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all var(--transition);
+}
+
+.dash-nav-links a:hover {
+  background: var(--primary-50);
+  border-color: var(--primary-200);
+  color: var(--primary);
+  transform: translateY(-1px);
+}
+
+/* ---------- Back Link ---------- */
+.back-link {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--primary);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+
+.back-link:hover {
+  color: var(--primary-dark);
+  text-decoration: underline;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 768px) {
+  .dash-container {
+    padding: var(--sp-4);
+  }
+
+  .dash-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .dash-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-3);
+  }
+
+  .dash-title {
+    font-size: 1.3rem;
+  }
+
+  .dash-summary-card-value {
+    font-size: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .dash-grid {
+    grid-template-columns: 1fr;
+  }
 }

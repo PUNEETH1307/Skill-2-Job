@@ -99,6 +99,27 @@ def create_or_update_profile(user_id: int, data: dict) -> dict:
     profile.cgpa = cgpa
     profile.graduation_year = data.get("graduation_year")
 
+    # ---- Handle dream_job (only update if key is present) ----
+    if "dream_job" in data:
+        dream_job = data["dream_job"]
+        if dream_job is not None:
+            dream_job = str(dream_job).strip()
+            if len(dream_job) > 150:
+                dream_job = dream_job[:150]
+        profile.dream_job = dream_job
+
+    # ---- Handle expected_lpa (only update if key is present) ----
+    if "expected_lpa" in data:
+        expected_lpa = data["expected_lpa"]
+        if expected_lpa is not None:
+            try:
+                expected_lpa = float(expected_lpa)
+            except (TypeError, ValueError):
+                raise ValueError({"expected_lpa": "expected_lpa must be a number"})
+            if expected_lpa < 0.0 or expected_lpa > 100.0:
+                raise ValueError({"expected_lpa": "expected_lpa must be between 0.0 and 100.0"})
+        profile.expected_lpa = expected_lpa
+
     # ---- 4. Handle skills ----
     skills = data.get("skills")
     if skills is not None:

@@ -1,0 +1,15 @@
+node_modules
+.git
+.kiro
+.vscode
+__pycache__
+*.pyc
+.hypothesis
+.pytest_cache
+backend/dev.db
+backend/uploads/*
+frontend/dist
+frontend/node_modules
+*.md
+!README.md
+!DEPLOYMENT.md

@@ -32,9 +32,24 @@ class LoginSchema(Schema):
     password = fields.String(required=True)
 
 
+class ForgotPasswordSchema(Schema):
+    """Validates password reset request payloads."""
+
+    email = fields.String(required=True)
+
+
+class ResetPasswordSchema(Schema):
+    """Validates the reset password payload."""
+
+    token = fields.String(required=True)
+    password = fields.String(required=True, validate=validate.Length(min=8))
+
+
 # Schema instances (reused across requests)
 _register_schema = RegisterSchema()
 _login_schema = LoginSchema()
+_forgot_schema = ForgotPasswordSchema()
+_reset_password_schema = ResetPasswordSchema()
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +197,108 @@ def login():
                 }
             ),
             401,
+        )
+
+
+@auth_bp.route("/forgot-password", methods=["POST"])
+def forgot_password():
+    """Issue a password reset request for the given email."""
+    json_data = request.get_json(silent=True)
+    if not json_data:
+        return (
+            jsonify(
+                {
+                    "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Request body must be valid JSON",
+                        "fields": {},
+                    }
+                }
+            ),
+            400,
+        )
+
+    errors = _forgot_schema.validate(json_data)
+    if errors:
+        return (
+            jsonify(
+                {
+                    "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Invalid input data",
+                        "fields": errors,
+                    }
+                }
+            ),
+            400,
+        )
+
+    data = _forgot_schema.load(json_data)
+    try:
+        auth = AuthModule()
+        result = auth.request_password_reset(email=data["email"])
+        return jsonify(result), 200
+    except ValueError as exc:
+        return (
+            jsonify(
+                {
+                    "message": "If an account with that email exists, a password reset link will be sent.",
+                }
+            ),
+            200,
+        )
+
+
+@auth_bp.route("/reset-password", methods=["POST"])
+def reset_password():
+    """Reset the user's password using a reset token."""
+    json_data = request.get_json(silent=True)
+    if not json_data:
+        return (
+            jsonify(
+                {
+                    "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Request body must be valid JSON",
+                        "fields": {},
+                    }
+                }
+            ),
+            400,
+        )
+
+    errors = _reset_password_schema.validate(json_data)
+    if errors:
+        return (
+            jsonify(
+                {
+                    "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Invalid input data",
+                        "fields": errors,
+                    }
+                }
+            ),
+            400,
+        )
+
+    data = _reset_password_schema.load(json_data)
+    try:
+        auth = AuthModule()
+        result = auth.reset_password(token=data["token"], password=data["password"])
+        return jsonify(result), 200
+    except ValueError as exc:
+        return (
+            jsonify(
+                {
+                    "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": str(exc),
+                        "fields": {},
+                    }
+                }
+            ),
+            400,
         )
 
 

@@ -5,10 +5,6 @@ interface ProtectedRouteProps {
   requiredRole?: 'student' | 'placement_officer' | 'admin';
 }
 
-/**
- * Role hierarchy: admin > placement_officer > student.
- * A higher-privilege role can access lower-privilege routes.
- */
 const ROLE_LEVEL: Record<string, number> = {
   student: 0,
   placement_officer: 1,
@@ -16,7 +12,24 @@ const ROLE_LEVEL: Record<string, number> = {
 };
 
 export default function ProtectedRoute({ requiredRole }: ProtectedRouteProps) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+  // Wait for session restore before making any redirect decision
+  if (isLoading) {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100vh',
+        background: '#f8fafc',
+        fontSize: '16px',
+        color: '#64748b',
+      }}>
+        Loading...
+      </div>
+    );
+  }
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/login" replace />;
@@ -26,7 +39,9 @@ export default function ProtectedRoute({ requiredRole }: ProtectedRouteProps) {
     const userLevel = ROLE_LEVEL[user.role] ?? -1;
     const requiredLevel = ROLE_LEVEL[requiredRole] ?? 0;
     if (userLevel < requiredLevel) {
-      return <Navigate to="/" replace />;
+      // Redirect to their own dashboard instead of landing
+      const home = user.role === 'student' ? '/student/dashboard' : '/admin/dashboard';
+      return <Navigate to={home} replace />;
     }
   }
 

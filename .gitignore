@@ -1,23 +1,67 @@
-# Python
+# ─── Python ───────────────────────────────────────────────
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
 *.egg-info/
+*.egg
+dist/
+build/
+.eggs/
 .hypothesis/
 .pytest_cache/
-*.db
-venv/
-.env
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
 
-# Node
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# SQLite dev databases
+*.db
+*.sqlite3
+
+# ─── Environment / Secrets ────────────────────────────────
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env
+
+# ─── Node / Frontend ──────────────────────────────────────
 node_modules/
 frontend/dist/
+frontend/.vite/
+.npm/
 
-# IDE
+# ─── Uploads (user-generated files) ──────────────────────
+backend/uploads/*.pdf
+backend/uploads/*.docx
+backend/uploads/*.doc
+# Keep the uploads folder itself
+!backend/uploads/.gitkeep
+
+# ─── IDE / Editor ─────────────────────────────────────────
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
 
-# OS
+# ─── OS ───────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 desktop.ini
 *.lnk
+
+# ─── Docker ───────────────────────────────────────────────
+*.log
+
+# ─── Compiled / Generated ─────────────────────────────────
+*.pyc
+*.pyo

@@ -75,6 +75,15 @@ def create_app(config_name='default'):
     from app.routes.dashboard_routes import dashboard_bp
     app.register_blueprint(dashboard_bp)
 
+    from app.routes.interview_routes import interview_bp
+    app.register_blueprint(interview_bp)
+
+    from app.routes.notification_routes import notification_bp
+    app.register_blueprint(notification_bp)
+
+    from app.routes.placement_routes import placement_bp
+    app.register_blueprint(placement_bp)
+
     # Register input sanitization before_request hook
     from app.utils.sanitizer import register_sanitizer
     register_sanitizer(app)
@@ -84,19 +93,29 @@ def create_app(config_name='default'):
     register_error_handlers(app)
 
     # ------------------------------------------------------------------
-    # Catch-all route: serve React Router's index.html for any non-API
-    # path so that client-side routing works correctly.
+    # Dev mode: redirect root and non-API paths to Vite dev server
+    # Production: serve the built React SPA from frontend/dist
     # ------------------------------------------------------------------
     if has_frontend:
         @app.route("/", defaults={"path": ""})
         @app.route("/<path:path>")
         def serve_react(path):
-            # If the requested path matches a real file in dist/ (e.g.
-            # assets/index-xxx.js), serve it directly.
             full_path = os.path.join(frontend_dist, path)
             if path and os.path.isfile(full_path):
                 return send_from_directory(frontend_dist, path)
-            # Otherwise, serve index.html so React Router can handle the route.
             return send_from_directory(frontend_dist, "index.html")
+    else:
+        # Development: no built frontend — redirect browser to Vite dev server
+        from flask import redirect as flask_redirect, request as flask_request
+
+        @app.route("/", defaults={"path": ""})
+        @app.route("/<path:path>")
+        def dev_redirect(path):
+            # Don't intercept API calls
+            if flask_request.path.startswith("/api/"):
+                from flask import abort
+                abort(404)
+            frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+            return flask_redirect(frontend_url + "/" + path, code=302)
 
     return app

@@ -292,6 +292,7 @@ function AdminSidebar({ active, isAdmin, sidebarOpen, onToggle, onLogout }: Side
     { id: 'jobs', label: 'Job Roles', icon: '💼', path: '/admin/jobs' },
     { id: 'shortlist', label: 'Shortlist', icon: '📋', path: '/admin/shortlist' },
     { id: 'interviews', label: 'Interviews', icon: '🗓️', path: '/admin/interviews' },
+    { id: 'placements', label: 'Placements', icon: '🎓', path: '/admin/placements' },
     { id: 'analytics', label: 'Analytics', icon: '📊', path: '/admin/analytics' },
     { id: 'courses', label: 'Courses', icon: '📚', path: '/admin/courses' },
     { id: 'notifications', label: 'Notifications', icon: '🔔', path: '/admin/notifications' },

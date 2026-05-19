@@ -61,6 +61,16 @@ def register_error_handlers(app):
 
     @app.errorhandler(404)
     def not_found(error):
+        from flask import request, redirect
+        # Only return JSON 404 for API routes
+        if request.path.startswith("/api/"):
+            message = getattr(error, "description", "Resource not found")
+            return _error_response("NOT_FOUND", message, 404)
+        # For all other routes in dev mode, redirect to the Vite dev server
+        import os
+        if app.debug:
+            frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+            return redirect(frontend_url + request.path, code=302)
         message = getattr(error, "description", "Resource not found")
         return _error_response("NOT_FOUND", message, 404)
 

@@ -140,8 +140,9 @@ class DashboardService:
     def _compute_skill_breakdown(self, skills: list[str]) -> dict[str, int]:
         """Group skills by category and return category→count dict.
 
-        Uses SkillAnalyzer.categorize_skills() to group by category,
-        then converts lists to counts.
+        Uses SkillAnalyzer.categorize_skills() to group by category.
+        Falls back to a single 'Skills' bucket when taxonomy is empty
+        or skills are not yet categorized.
 
         Args:
             skills: List of skill name strings.
@@ -153,7 +154,20 @@ class DashboardService:
             return {}
 
         categorized = self.skill_analyzer.categorize_skills(skills)
-        return {category: len(skill_list) for category, skill_list in categorized.items()}
+
+        # If taxonomy lookup returned nothing, bucket everything under 'Skills'
+        if not categorized:
+            return {"Skills": len(skills)}
+
+        result = {category: len(skill_list) for category, skill_list in categorized.items()}
+
+        # Any skills not matched to a category go into 'Other'
+        categorized_skills = {s for lst in categorized.values() for s in lst}
+        uncategorized = [s for s in skills if s not in categorized_skills]
+        if uncategorized:
+            result["Other"] = len(uncategorized)
+
+        return result
 
     def _compute_matched_job_count(self, profile: StudentProfile) -> int:
         """Count active job roles the student is eligible for.

@@ -305,16 +305,92 @@ def reset_password():
 @auth_bp.route("/logout", methods=["POST"])
 @jwt_required
 def logout():
-    """Invalidate the current session token.
-
-    Requires a valid JWT in the Authorization header.
-    Returns 200 on success.
-    """
+    """Invalidate the current session token."""
     from flask import g
-
     auth = AuthModule()
     auth.logout(g.jwt_token)
     return jsonify({"message": "Logged out successfully"}), 200
+
+
+@auth_bp.route("/setup", methods=["POST"])
+def setup_first_admin():
+    """Create the first admin account when no admin exists yet.
+
+    This endpoint is only active when there are zero admin users in the DB.
+    Once an admin exists, this endpoint returns 403.
+
+    Accepts JSON: name, email, password, phone (optional), role (optional,
+    defaults to 'admin').
+    """
+    from app import db
+    from app.models import User
+
+    # Only allow if no admin exists yet
+    existing_admin = User.query.filter_by(role="admin").first()
+    if existing_admin:
+        return jsonify({
+            "error": {
+                "code": "FORBIDDEN",
+                "message": "Setup already completed. Use admin panel to create users.",
+                "fields": {},
+            }
+        }), 403
+
+    json_data = request.get_json(silent=True)
+    if not json_data:
+        return jsonify({"error": {"code": "VALIDATION_ERROR", "message": "Request body must be valid JSON", "fields": {}}}), 400
+
+    role = json_data.get("role", "admin")
+    if role not in ("admin", "placement_officer"):
+        role = "admin"
+
+    try:
+        auth = AuthModule()
+        result = auth.register(
+            name=json_data.get("name", ""),
+            email=json_data.get("email", ""),
+            phone=json_data.get("phone") or "",
+            password=json_data.get("password", ""),
+            role=role,
+        )
+        return jsonify({**result, "role": role}), 201
+    except ValueError as exc:
+        return jsonify({"error": {"code": "VALIDATION_ERROR", "message": str(exc), "fields": {}}}), 400
+
+
+@auth_bp.route("/update-role", methods=["POST"])
+@jwt_required
+def update_user_role():
+    """Update a user's role. Requires admin privileges.
+
+    Accepts JSON: user_id (int), role ('student'|'placement_officer'|'admin').
+    """
+    from flask import g
+    from app import db
+    from app.models import User
+
+    if g.current_user.get("role") != "admin":
+        return jsonify({"error": {"code": "AUTHORIZATION_ERROR", "message": "Admin access required", "fields": {}}}), 403
+
+    json_data = request.get_json(silent=True)
+    if not json_data:
+        return jsonify({"error": {"code": "VALIDATION_ERROR", "message": "Request body must be valid JSON", "fields": {}}}), 400
+
+    user_id = json_data.get("user_id")
+    new_role = json_data.get("role", "")
+
+    if not user_id:
+        return jsonify({"error": {"code": "VALIDATION_ERROR", "message": "user_id is required", "fields": {}}}), 400
+    if new_role not in ("student", "placement_officer", "admin"):
+        return jsonify({"error": {"code": "VALIDATION_ERROR", "message": "role must be student, placement_officer, or admin", "fields": {}}}), 400
+
+    user = db.session.get(User, user_id)
+    if user is None:
+        return jsonify({"error": {"code": "NOT_FOUND", "message": "User not found", "fields": {}}}), 404
+
+    user.role = new_role
+    db.session.commit()
+    return jsonify({"message": f"Role updated to {new_role}", "user": user.to_dict()}), 200
 
 
 @auth_bp.route("/change-password", methods=["PUT"])

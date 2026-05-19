@@ -406,6 +406,10 @@ class PlacementRecord(db.Model):
     company_id = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=False)
     placement_date = db.Column(db.Date, nullable=True)
     department = db.Column(db.String(150), nullable=True)
+    package_lpa = db.Column(db.Float, nullable=True)
+    offer_letter_url = db.Column(db.String(500), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     profile = db.relationship("StudentProfile", back_populates="placement_records")
@@ -421,6 +425,19 @@ class PlacementRecord(db.Model):
         return f"<PlacementRecord id={self.id} profile_id={self.profile_id} company_id={self.company_id}>"
 
     def to_dict(self):
+        # Enrich with student name, job title, company name for convenience
+        student_name = None
+        job_title = None
+        company_name = None
+        try:
+            if self.profile and self.profile.user:
+                student_name = self.profile.user.name
+            if self.job_role:
+                job_title = self.job_role.title
+            if self.company:
+                company_name = self.company.name
+        except Exception:
+            pass
         return {
             "id": self.id,
             "profile_id": self.profile_id,
@@ -428,6 +445,13 @@ class PlacementRecord(db.Model):
             "company_id": self.company_id,
             "placement_date": self.placement_date.isoformat() if self.placement_date else None,
             "department": self.department,
+            "package_lpa": self.package_lpa,
+            "offer_letter_url": self.offer_letter_url,
+            "notes": self.notes,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "student_name": student_name,
+            "job_title": job_title,
+            "company_name": company_name,
         }
 
 
@@ -493,4 +517,132 @@ class PasswordResetToken(db.Model):
             "user_id": self.user_id,
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "used": self.used,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Interview
+# ---------------------------------------------------------------------------
+
+class Interview(db.Model):
+    """An interview slot scheduled for a shortlisted student."""
+
+    __tablename__ = "interview"
+
+    id = db.Column(db.Integer, primary_key=True)
+    profile_id = db.Column(db.Integer, db.ForeignKey("student_profile.id"), nullable=False)
+    job_role_id = db.Column(db.Integer, db.ForeignKey("job_role.id"), nullable=True)
+    company_id = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    scheduled_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    interview_date = db.Column(db.Date, nullable=False)
+    interview_time = db.Column(db.String(20), nullable=True)
+    mode = db.Column(db.String(30), nullable=True, default="in-person")  # in-person, online, phone
+    venue_or_link = db.Column(db.String(500), nullable=True)
+    status = db.Column(db.String(30), nullable=False, default="scheduled")  # scheduled, completed, cancelled, no-show
+    feedback = db.Column(db.Text, nullable=True)
+    result = db.Column(db.String(30), nullable=True)  # selected, rejected, on-hold
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    # Relationships
+    profile = db.relationship("StudentProfile")
+    job_role = db.relationship("JobRole")
+    company = db.relationship("Company")
+    scheduler = db.relationship("User", foreign_keys=[scheduled_by])
+
+    __table_args__ = (
+        db.Index("idx_interview_profile", "profile_id"),
+        db.Index("idx_interview_date", "interview_date"),
+        db.Index("idx_interview_status", "status"),
+    )
+
+    def __repr__(self):
+        return f"<Interview id={self.id} profile_id={self.profile_id} date={self.interview_date}>"
+
+    def to_dict(self):
+        student_name = None
+        job_title = None
+        company_name = None
+        try:
+            if self.profile and self.profile.user:
+                student_name = self.profile.user.name
+            if self.job_role:
+                job_title = self.job_role.title
+            if self.company:
+                company_name = self.company.name
+        except Exception:
+            pass
+        return {
+            "id": self.id,
+            "profile_id": self.profile_id,
+            "job_role_id": self.job_role_id,
+            "company_id": self.company_id,
+            "scheduled_by": self.scheduled_by,
+            "interview_date": self.interview_date.isoformat() if self.interview_date else None,
+            "interview_time": self.interview_time,
+            "mode": self.mode,
+            "venue_or_link": self.venue_or_link,
+            "status": self.status,
+            "feedback": self.feedback,
+            "result": self.result,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "student_name": student_name,
+            "job_title": job_title,
+            "company_name": company_name,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Notification
+# ---------------------------------------------------------------------------
+
+class Notification(db.Model):
+    """A notification/announcement sent by admin or placement officer."""
+
+    __tablename__ = "notification"
+
+    id = db.Column(db.Integer, primary_key=True)
+    sent_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    title = db.Column(db.String(255), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    target_audience = db.Column(db.String(50), nullable=False, default="all_students")
+    # all_students | shortlisted | specific_department
+    target_department = db.Column(db.String(150), nullable=True)
+    is_email = db.Column(db.Boolean, nullable=False, default=False)
+    recipient_count = db.Column(db.Integer, nullable=True, default=0)
+    sent_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    sender = db.relationship("User", foreign_keys=[sent_by])
+
+    __table_args__ = (
+        db.Index("idx_notification_sent_at", "sent_at"),
+    )
+
+    def __repr__(self):
+        return f"<Notification id={self.id} title={self.title!r}>"
+
+    def to_dict(self):
+        sender_name = None
+        try:
+            if self.sender:
+                sender_name = self.sender.name
+        except Exception:
+            pass
+        return {
+            "id": self.id,
+            "sent_by": self.sent_by,
+            "sender_name": sender_name,
+            "title": self.title,
+            "message": self.message,
+            "target_audience": self.target_audience,
+            "target_department": self.target_department,
+            "is_email": self.is_email,
+            "recipient_count": self.recipient_count,
+            "sent_at": self.sent_at.isoformat() if self.sent_at else None,
         }

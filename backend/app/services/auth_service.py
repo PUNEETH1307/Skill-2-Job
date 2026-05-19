@@ -37,14 +37,18 @@ class AuthModule:
     # Registration
     # ------------------------------------------------------------------
 
-    def register(self, name: str, email: str, phone: str, password: str) -> dict:
-        """Register a new student account.
+    def register(self, name: str, email: str, phone: str, password: str,
+                 role: str = "student") -> dict:
+        """Register a new user account.
 
         Args:
             name: Full name of the user.
             email: Email address (must be unique).
             phone: Phone number.
             password: Plain-text password (>= 8 characters).
+            role: Account role — 'student', 'placement_officer', or 'admin'.
+                  Defaults to 'student'. Only 'student' is allowed from the
+                  public register endpoint; other roles require admin creation.
 
         Returns:
             dict with ``user_id`` and confirmation ``message``.
@@ -69,6 +73,9 @@ class AuthModule:
         if len(password) < 8:
             raise ValueError("Password must be at least 8 characters")
 
+        if role not in _ROLE_HIERARCHY:
+            raise ValueError(f"Invalid role: {role}")
+
         # --- duplicate check ---
         existing = User.query.filter_by(email=email).first()
         if existing:
@@ -85,7 +92,7 @@ class AuthModule:
             email=email.strip(),
             phone=phone,
             password_hash=password_hash,
-            role="student",
+            role=role,
             status="active",
         )
         db.session.add(user)

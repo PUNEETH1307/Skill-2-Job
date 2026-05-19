@@ -201,12 +201,8 @@ class SkillAnalyzer:
     def analyze_and_store(self, profile: StudentProfile) -> dict:
         """Run full skill analysis on a student profile and persist results.
 
-        Steps:
-            1. Build profile text from skills_json and project descriptions.
-            2. Extract and normalize skills.
-            3. Generate skill vector.
-            4. Store ``skill_vector_json`` on the profile.
-            5. Flag any unknown skills.
+        When the taxonomy is empty or skills are not recognized, falls back
+        to using the raw skills_json directly so students always see their skills.
 
         Args:
             profile: The StudentProfile instance to analyze.
@@ -217,11 +213,13 @@ class SkillAnalyzer:
         # Build profile text
         parts: list[str] = []
 
+        raw_skills_list: list[str] = []
         if profile.skills_json:
             try:
                 skills_list = json.loads(profile.skills_json)
                 if isinstance(skills_list, list):
-                    parts.append(", ".join(str(s) for s in skills_list))
+                    raw_skills_list = [str(s).strip() for s in skills_list if str(s).strip()]
+                    parts.append(", ".join(raw_skills_list))
             except (json.JSONDecodeError, TypeError):
                 pass
 
@@ -233,20 +231,26 @@ class SkillAnalyzer:
 
         profile_text = "\n".join(parts)
 
-        # Extract skills
+        # Extract skills via taxonomy matching
         extracted = self.extract_skills(profile_text)
 
-        # Flag unknown terms
-        tokens = self._tokenize(profile_text)
-        for token in tokens:
-            normalized = self.normalize_skill(token)
-            match = SkillTaxonomy.query.filter(
-                db.func.lower(SkillTaxonomy.canonical_name) == normalized.lower()
-            ).first()
-            if not match and normalized:
-                self.flag_unknown_skill(normalized)
+        # ── Fallback: if taxonomy is empty or no skills matched, use raw list ──
+        if not extracted and raw_skills_list:
+            extracted = raw_skills_list
 
-        # Generate vector
+        # Flag unknown terms (only when taxonomy has entries)
+        taxonomy_count = SkillTaxonomy.query.filter_by(is_deprecated=False).count()
+        if taxonomy_count > 0:
+            tokens = self._tokenize(profile_text)
+            for token in tokens:
+                normalized = self.normalize_skill(token)
+                match = SkillTaxonomy.query.filter(
+                    db.func.lower(SkillTaxonomy.canonical_name) == normalized.lower()
+                ).first()
+                if not match and normalized:
+                    self.flag_unknown_skill(normalized)
+
+        # Generate vector (will be all-zeros if taxonomy is empty — that's OK)
         vector = self.generate_skill_vector(extracted)
 
         # Build skill index
@@ -270,8 +274,10 @@ class SkillAnalyzer:
         profile.skill_vector_json = json.dumps(vector_data)
         db.session.commit()
 
-        # Categorize
+        # Categorize — fallback to 'Skills' bucket if taxonomy empty
         categories = self.categorize_skills(extracted)
+        if not categories and extracted:
+            categories = {"Skills": extracted}
 
         return {
             "skills": extracted,

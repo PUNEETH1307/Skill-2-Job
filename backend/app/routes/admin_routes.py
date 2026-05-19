@@ -193,6 +193,25 @@ def update_company(id):
 # ---------------------------------------------------------------------------
 
 
+@admin_bp.route("/jobs", methods=["GET"])
+@jwt_required
+@role_required("placement_officer")
+def list_jobs():
+    """List all job roles with company info.
+
+    Returns:
+        200: JSON list of all job role records.
+    """
+    jobs = JobRole.query.order_by(JobRole.id.desc()).all()
+    result = []
+    for job in jobs:
+        d = job.to_dict()
+        company = db.session.get(Company, job.company_id)
+        d["company_name"] = company.name if company else None
+        result.append(d)
+    return jsonify(result), 200
+
+
 @admin_bp.route("/jobs", methods=["POST"])
 @jwt_required
 @role_required("placement_officer")

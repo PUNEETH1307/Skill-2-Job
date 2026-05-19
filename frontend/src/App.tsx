@@ -20,6 +20,7 @@ import Shortlist from './pages/admin/Shortlist';
 import Analytics from './pages/admin/Analytics';
 import Interviews from './pages/admin/Interviews';
 import Notifications from './pages/admin/Notifications';
+import Placements from './pages/admin/Placements';
 import UserManagement from './pages/admin/UserManagement';
 import SkillTaxonomy from './pages/admin/SkillTaxonomy';
 import Courses from './pages/admin/Courses';
@@ -28,16 +29,16 @@ function App() {
   return (
     <AuthProvider>
       <Routes>
-        {/* Landing page with 3 role options */}
+        {/* Landing */}
         <Route path="/" element={<Landing />} />
 
-        {/* Public routes */}
+        {/* Public */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
-        {/* Student protected routes */}
+        {/* Student */}
         <Route element={<ProtectedRoute requiredRole="student" />}>
           <Route path="/student/dashboard" element={<StudentDashboard />} />
           <Route path="/student/profile" element={<StudentProfile />} />
@@ -48,7 +49,7 @@ function App() {
           <Route path="/student/settings" element={<Settings />} />
         </Route>
 
-        {/* Admin / Placement Officer protected routes */}
+        {/* Placement Officer + Admin */}
         <Route element={<ProtectedRoute requiredRole="placement_officer" />}>
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path="/admin/companies" element={<Companies />} />
@@ -58,15 +59,16 @@ function App() {
           <Route path="/admin/courses" element={<Courses />} />
           <Route path="/admin/interviews" element={<Interviews />} />
           <Route path="/admin/notifications" element={<Notifications />} />
+          <Route path="/admin/placements" element={<Placements />} />
         </Route>
 
-        {/* Admin-only routes */}
+        {/* Admin only */}
         <Route element={<ProtectedRoute requiredRole="admin" />}>
           <Route path="/admin/users" element={<UserManagement />} />
           <Route path="/admin/skills" element={<SkillTaxonomy />} />
         </Route>
 
-        {/* Catch-all: redirect to landing */}
+        {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AuthProvider>

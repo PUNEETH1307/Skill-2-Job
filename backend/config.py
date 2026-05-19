@@ -21,7 +21,7 @@ class DevelopmentConfig(Config):
     DEBUG = True
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         'DATABASE_URL',
-        'sqlite:///' + os.path.join(os.path.abspath(os.path.dirname(__file__)), 'dev.db')
+        'mysql+pymysql://root:PUNEE13%40work@127.0.0.1:3306/skillbridge'
     )
 
 

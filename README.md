@@ -1,343 +1,506 @@
-# Skill2Job: AI-Driven Placement Coordination and Skill Mapping System
+# Skill2Job — AI-Driven Placement Coordination & Skill Mapping System
 
-A production-ready, full-stack AI-powered web application that helps students, placement officers, and admins manage placement activities using Artificial Intelligence and Machine Learning.
+<div align="center">
+
+![Skill2Job Banner](https://img.shields.io/badge/Skill2Job-AI%20Placement%20System-4f46e5?style=for-the-badge&logo=graduation-cap)
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python)
+![Flask](https://img.shields.io/badge/Flask-3.1-000000?style=flat-square&logo=flask)
+![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript)
+![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?style=flat-square&logo=mysql)
+
+**An intelligent placement management platform that bridges students, placement officers, and companies using AI-powered skill matching, resume generation, and placement analytics.**
+
+</div>
 
 ---
 
-## 1. Folder Structure
+## Table of Contents
+
+- [Overview](#overview)
+- [System Architecture](#system-architecture)
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Prerequisites](#prerequisites)
+- [Installation & Setup](#installation--setup)
+- [Running the Project](#running-the-project)
+- [Default Accounts](#default-accounts)
+- [API Overview](#api-overview)
+- [Role-Based Access](#role-based-access)
+- [Environment Variables](#environment-variables)
+- [Database Schema](#database-schema)
+- [Contributing](#contributing)
+
+---
+
+## Overview
+
+Skill2Job is a full-stack web application built as a Major Project for placement coordination. It uses **NLP**, **cosine similarity**, and **Random Forest ML** to:
+
+- Match students to job roles based on skill vectors
+- Generate AI-enhanced resumes tailored to dream jobs
+- Identify skill gaps and recommend courses
+- Predict placement success probability
+- Give placement officers a complete dashboard to manage shortlisting, interviews, and placements
+
+---
+
+## System Architecture
 
 ```
-Skill2Job/
-├── .github/workflows/ci.yml          # CI/CD pipeline (GitHub Actions)
-├── frontend/                          # React + TypeScript Frontend
-│   ├── src/
-│   │   ├── components/                # Reusable UI components
-│   │   │   ├── LoadingSkeleton.tsx     # Shimmer loading placeholders
-│   │   │   ├── ProtectedRoute.tsx     # Auth guard with role hierarchy
-│   │   │   └── SummaryCard.tsx        # Dashboard metric cards
-│   │   ├── context/
-│   │   │   └── AuthContext.tsx        # JWT session management
-│   │   ├── pages/
-│   │   │   ├── admin/                 # Admin/Officer modules
-│   │   │   │   ├── Analytics.tsx      # Placement analytics + ML predictions
-│   │   │   │   ├── Companies.tsx      # Company CRUD
-│   │   │   │   ├── Courses.tsx        # Course management
-│   │   │   │   ├── Dashboard.tsx      # Admin dashboard
-│   │   │   │   ├── JobRoles.tsx       # Job openings management
-│   │   │   │   ├── Shortlist.tsx      # AI candidate ranking
-│   │   │   │   ├── SkillTaxonomy.tsx  # Skill taxonomy admin
-│   │   │   │   └── UserManagement.tsx # User administration
-│   │   │   ├── student/              # Student modules
-│   │   │   │   ├── Dashboard.tsx      # Student dashboard
-│   │   │   │   ├── JobRecommendations.tsx # AI job matches
-│   │   │   │   ├── Profile.tsx        # Profile (upload resume OR manual)
-│   │   │   │   ├── Resume.tsx         # AI resume generation + download
-│   │   │   │   ├── SkillAnalysis.tsx  # NLP skill breakdown
-│   │   │   │   └── SkillGap.tsx       # Gap analysis + course cards
-│   │   │   ├── Login.tsx
-│   │   │   ├── Register.tsx
-│   │   │   ├── ForgotPassword.tsx
-│   │   │   └── ResetPassword.tsx
-│   │   ├── services/
-│   │   │   └── api.ts                 # Axios + JWT interceptors
-│   │   ├── styles/                    # Modern CSS design system
-│   │   │   ├── global.css             # Variables, animations, skeletons
-│   │   │   ├── auth.css               # Glassmorphism auth pages
-│   │   │   ├── dashboard.css          # Sidebar layout
-│   │   │   └── pages.css              # Page components
-│   │   ├── App.tsx                    # Router configuration
-│   │   └── main.tsx                   # Entry point
-│   ├── Dockerfile                     # Multi-stage production build
-│   ├── nginx.conf                     # Production nginx config
-│   ├── vercel.json                    # Vercel deployment config
-│   ├── package.json
-│   └── vite.config.ts
-│
-├── backend/                           # Flask REST API
-│   ├── app/
-│   │   ├── models/
-│   │   │   └── models.py             # SQLAlchemy entities (14 models)
-│   │   ├── routes/
-│   │   │   ├── admin_routes.py        # Admin APIs (1200+ lines)
-│   │   │   ├── auth_routes.py         # Auth APIs
-│   │   │   ├── dashboard_routes.py    # Dashboard + prediction APIs
-│   │   │   ├── job_routes.py          # Recommendations + skill gap
-│   │   │   ├── profile_routes.py      # Profile CRUD
-│   │   │   ├── resume_routes.py       # Resume gen + upload + parse
-│   │   │   └── skill_routes.py        # Skill analysis
-│   │   ├── services/                  # Business logic + AI
-│   │   │   ├── ai_resume_service.py   # NLP resume content generation
-│   │   │   ├── analytics_service.py   # Placement analytics
-│   │   │   ├── auth_service.py        # JWT + bcrypt + RBAC
-│   │   │   ├── dashboard_service.py   # Dashboard aggregations
-│   │   │   ├── job_matching.py        # Cosine similarity matching
-│   │   │   ├── job_role_knowledge_base.py # Role-skill knowledge base
-│   │   │   ├── placement_predictor.py # Random Forest ML predictions
-│   │   │   ├── profile_service.py     # Profile management
-│   │   │   ├── resume_generator.py    # PDF generation (ReportLab)
-│   │   │   ├── resume_parser.py       # Resume text extraction (NLP)
-│   │   │   └── skill_analyzer.py      # SpaCy skill extraction
-│   │   ├── utils/
-│   │   │   ├── auth_decorator.py      # @jwt_required, @role_required
-│   │   │   ├── error_handlers.py      # Global error handling
-│   │   │   └── sanitizer.py           # Input sanitization
-│   │   └── __init__.py                # Flask app factory + CORS
-│   ├── tests/                         # 418 tests
-│   │   ├── unit/                      # 258 unit tests
-│   │   ├── integration/               # 137 integration tests
-│   │   └── property/                  # 23 property-based tests
-│   ├── config.py                      # Dev/Test/Prod configurations
-│   ├── gunicorn.conf.py               # Production WSGI config
-│   ├── Procfile                       # Render/Railway start command
-│   ├── requirements.txt               # Python dependencies
-│   ├── run.py                         # Development entry point
-│   ├── seed.py                        # DB seeding (taxonomy + admin)
-│   └── seed_courses.py                # Course recommendations seeding
-│
-├── database/
-│   ├── schema.sql                     # Complete MySQL schema (17 tables)
-│   └── migrations/
-│
-├── Dockerfile                         # Backend Docker image
-├── docker-compose.yml                 # Full stack orchestration
-├── render.yaml                        # Render Blueprint
-├── DEPLOYMENT.md                      # Deployment guide
-└── README.md                          # This file
+┌─────────────────────────────────────────────────────────┐
+│                    SKILL2JOB SYSTEM                      │
+├──────────────┬──────────────────────┬───────────────────┤
+│   STUDENT    │  PLACEMENT OFFICER   │      ADMIN        │
+│  INTERFACE   │     INTERFACE        │    INTERFACE      │
+├──────────────┴──────────────────────┴───────────────────┤
+│                  React + TypeScript (Vite)               │
+├─────────────────────────────────────────────────────────┤
+│                   Flask REST API (Python)                │
+├──────────┬──────────┬──────────┬──────────┬────────────┤
+│ Profile  │  Resume  │  Skill   │   Job    │ Analytics  │
+│ Module   │  Module  │ Analysis │ Matching │  Module    │
+├──────────┴──────────┴──────────┴──────────┴────────────┤
+│         SpaCy NLP │ Scikit-learn │ ReportLab            │
+├─────────────────────────────────────────────────────────┤
+│                    MySQL Database                        │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Source Code Summary
+## Features
 
-| Module | Technology | Lines | Description |
-|--------|-----------|-------|-------------|
-| Authentication | Flask + JWT + bcrypt | ~400 | Registration, login, logout, password reset, RBAC |
-| Profile Management | Flask + SQLAlchemy | ~300 | CRUD with validation, resume upload auto-extraction |
-| Skill Extraction | SpaCy NLP | ~250 | Tokenization, normalization, categorization, vectors |
-| Job Matching | Scikit-learn | ~250 | Cosine similarity, recommendations, candidate ranking |
-| Resume Generation | ReportLab + NLP | ~400 | AI-enhanced PDF with templates |
-| Skill Gap Analysis | NumPy | ~100 | Vector comparison, deficit scoring |
-| Course Recommendations | Content-based | ~50 | Skill-to-course mapping (49 courses, 4 providers) |
-| Placement Prediction | Random Forest | ~200 | ML-based placement probability |
-| Analytics | SQLAlchemy | ~150 | Department/company breakdowns, skill demand |
-| Admin Dashboard | Flask + React | ~1500 | Full CRUD with search, filters, pagination |
-| Frontend UI | React + TypeScript | ~3000 | Modern glassmorphism design, responsive |
+### Student Interface
+| Feature | Description |
+|---|---|
+| 🔐 Auth | Register, login, forgot/reset password, JWT sessions |
+| 👤 Profile | Academic details, skills, projects, certifications |
+| 📄 Resume | Upload PDF/DOCX for NLP parsing, generate AI-enhanced PDF resume |
+| 🧠 Skill Analysis | Categorized skill breakdown with taxonomy matching |
+| 💼 Job Matches | Cosine similarity-based ranked job recommendations |
+| 📊 Skill Gap | Missing skills per job role with deficit scores |
+| 📚 Courses | Recommended courses (Coursera, Udemy, NPTEL, YouTube) per skill gap |
+| 🤖 AI Prediction | Random Forest placement success probability with contributing factors |
+| ⚙️ Settings | Change password, notification preferences |
 
----
+### Placement Officer Interface
+| Feature | Description |
+|---|---|
+| 📋 Dashboard | Placement overview, active jobs, recent shortlists, top skills demand |
+| 🏢 Companies | Add and manage company records |
+| 💼 Job Roles | Create job roles with auto skill vector generation |
+| 👥 Shortlist | Rank candidates by compatibility, mark shortlisted, send email alerts |
+| 🗓️ Interviews | Schedule interviews, update status/result, auto-create placement on selection |
+| 🎓 Placements | Record confirmed placements with package details |
+| 🔔 Notifications | Broadcast announcements to all students, shortlisted, or by department |
+| 📊 Analytics | Placement stats, department/company breakdown, skill demand chart |
+| 📚 Courses | Add course recommendations per skill |
 
-## 3. API Documentation
-
-### Authentication
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/auth/register` | Register student account |
-| POST | `/api/auth/login` | Login → JWT token |
-| POST | `/api/auth/logout` | Invalidate token |
-| POST | `/api/auth/forgot-password` | Request reset token |
-| POST | `/api/auth/reset-password` | Reset with token |
-
-### Student Profile
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/profile` | Get student profile |
-| PUT | `/api/profile` | Create/update profile |
-
-### Skills
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/skills/analysis` | Run NLP skill extraction |
-
-### Jobs & Matching
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/jobs/recommendations` | AI job recommendations (ranked) |
-| GET | `/api/jobs/<id>/skill-gap` | Skill gap analysis |
-| GET | `/api/jobs/<id>/courses` | Course recommendations for gaps |
-
-### Resume
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/resume/generate` | Generate AI-enhanced PDF |
-| GET | `/api/resume/download` | Download generated PDF |
-| POST | `/api/resume/upload` | Upload existing resume |
-| POST | `/api/resume/parse-for-profile` | Upload + auto-extract profile |
-| GET | `/api/resume/uploads` | List uploaded resumes |
-
-### Dashboard
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/dashboard/student` | Student summary |
-| GET | `/api/dashboard/coordinator` | Officer summary |
-| GET | `/api/dashboard/admin` | Admin summary |
-| GET | `/api/dashboard/student/prediction` | Placement probability |
-
-### Admin
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/admin/users?search=&page=&per_page=` | List users (paginated) |
-| POST | `/api/admin/users` | Create user |
-| PUT | `/api/admin/users/<id>/status` | Activate/deactivate |
-| GET/POST | `/api/admin/companies` | List/create companies |
-| PUT | `/api/admin/companies/<id>` | Update company |
-| POST | `/api/admin/jobs` | Create job role |
-| PUT | `/api/admin/jobs/<id>` | Update job role |
-| DELETE | `/api/admin/jobs/<id>` | Delete job role |
-| GET | `/api/admin/jobs/<id>/shortlist` | Ranked candidates |
-| POST | `/api/admin/jobs/<id>/shortlist` | Shortlist candidates |
-| GET | `/api/admin/analytics?date_from=&date_to=` | Placement analytics |
-| POST | `/api/admin/predictions/train` | Train ML model |
-| GET | `/api/admin/predictions/batch` | All student predictions |
-| GET/POST | `/api/admin/skills/taxonomy` | Skill taxonomy CRUD |
-| GET/POST | `/api/admin/courses` | Course management |
-
----
-
-## 4. Database Schema
-
-17 tables in 3NF normalization. See `database/schema.sql` for full DDL.
-
-**Core Entities:**
-- `users` — Unified user table (student/admin/placement_officer)
-- `students` — Academic profile + skill vectors
-- `skills` — Canonical skill taxonomy with synonyms
-- `student_skills` — Many-to-many junction with proficiency
-- `companies` — Placement companies
-- `job_roles` — Job openings with requirement vectors
-- `applications` — Student applications with status tracking
-- `resumes` — Generated and uploaded resumes
-- `recommendations` — AI job recommendations with scores
-- `courses` — Learning resources (Coursera/Udemy/NPTEL/YouTube)
-- `skill_gaps` — Identified gaps with priority levels
-- `analytics` — Event tracking for dashboards
-- `placement_records` — Confirmed placements
-
----
-
-## 5. Setup Guide
-
-### Prerequisites
-- Python 3.12+
-- Node.js 18+
-- MySQL (or SQLite for development)
-
-### Backend Setup
-```bash
-cd backend
-pip install -r requirements.txt
-python -m spacy download en_core_web_sm
-python seed.py              # Creates tables + seeds taxonomy + admin
-python seed_courses.py      # Seeds 49 courses from 4 providers
-python run.py               # Starts on http://localhost:5000
-```
-
-### Frontend Setup
-```bash
-cd frontend
-npm install
-npm run dev                 # Starts on http://localhost:3000
-```
-
-### Default Login
-| Role | Email | Password |
-|------|-------|----------|
-| Admin | admin@skill2job.com | Admin@123 |
-
----
-
-## 6. Deployment Guide
-
-See `DEPLOYMENT.md` for complete instructions. Three options:
-
-1. **Render + Vercel** (free tier) — Recommended
-2. **Railway** (all-in-one platform)
-3. **Docker** (self-hosted VPS)
-
-Quick Docker deploy:
-```bash
-docker-compose up -d --build
-docker-compose exec backend python seed.py
-docker-compose exec backend python seed_courses.py
-```
-
----
-
-## 7. Testing Guide
-
-```bash
-cd backend
-
-# Run all tests (418 total)
-python -m pytest tests/
-
-# Unit tests only (258 tests, ~15s)
-python -m pytest tests/unit/
-
-# Integration tests (137 tests, ~90s)
-python -m pytest tests/integration/
-
-# Property-based tests (23 tests, ~30s)
-python -m pytest tests/property/
-
-# With coverage
-python -m pytest tests/ --cov=app --cov-report=html
-```
-
-**Test Categories:**
-- Unit: Auth, profile, skills, job matching, AI resume, dashboard, models
-- Integration: All API endpoints via HTTP client
-- Property: Hypothesis-based correctness proofs (score bounds, monotonicity, determinism)
-
----
-
-## 8. Future Enhancements
-
-### Short-term
-- [ ] Email notifications (placement updates, password reset delivery)
-- [ ] Real-time chat between students and placement officers (WebSocket)
-- [ ] Resume templates selection (multiple PDF layouts)
-- [ ] Bulk student import via CSV upload
-- [ ] Interview scheduling module
-
-### Medium-term
-- [ ] Advanced ML: Collaborative filtering for job recommendations
-- [ ] Resume parsing with LLM (GPT/Claude) for better extraction
-- [ ] Video interview integration
-- [ ] Company portal (self-service job posting)
-- [ ] Mobile app (React Native)
-
-### Long-term
-- [ ] Multi-institution support (SaaS model)
-- [ ] Blockchain-verified certifications
-- [ ] AI mock interview with feedback
-- [ ] Salary prediction model
-- [ ] Alumni network integration
-- [ ] Integration with LinkedIn/Naukri APIs
-
-### Technical Improvements
-- [ ] Redis caching for recommendations
-- [ ] Celery task queue for async resume generation
-- [ ] Elasticsearch for full-text search
-- [ ] Rate limiting on auth endpoints
-- [ ] Audit logging for admin actions
-- [ ] Database read replicas for analytics queries
+### Admin Interface
+| Feature | Description |
+|---|---|
+| 👥 User Management | Create, search, paginate users; change roles; activate/deactivate |
+| 🧠 Skill Taxonomy | CRUD skill taxonomy with categories and synonyms |
+| 📈 Placement Prediction | Train Random Forest model, batch predict all students |
+| 📊 Full Analytics | All coordinator features + system health metrics |
 
 ---
 
 ## Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
-| Frontend | React 18, TypeScript, Vite, CSS Custom Properties |
-| Backend | Python Flask, SQLAlchemy, Marshmallow |
-| Database | SQLite (dev) / MySQL 8.0 (production) |
-| AI/ML | SpaCy (NLP), Scikit-learn (cosine similarity, Random Forest) |
-| PDF | ReportLab |
-| Auth | JWT (PyJWT), bcrypt |
-| Testing | Pytest, Hypothesis (property-based) |
-| Deploy | Docker, Gunicorn, Nginx, GitHub Actions |
+|---|---|
+| **Frontend** | React 18, TypeScript, Vite, React Router v6, Recharts, Axios |
+| **Backend** | Python 3.11, Flask 3.1, SQLAlchemy, Flask-Migrate |
+| **Database** | MySQL 8.0 (PyMySQL driver) |
+| **ML / NLP** | SpaCy (`en_core_web_sm`), Scikit-learn, NumPy |
+| **Auth** | JWT (PyJWT), bcrypt |
+| **PDF** | ReportLab (generation), PyPDF2 + python-docx (parsing) |
+| **Email** | SMTP (Gmail/Outlook) with HTML templates |
+| **Testing** | Pytest, Hypothesis (property-based) |
+| **Deployment** | Docker, Gunicorn, Nginx |
+
+---
+
+## Project Structure
+
+```
+Skill2Job/
+├── backend/                    # Flask API
+│   ├── app/
+│   │   ├── models/             # SQLAlchemy models
+│   │   ├── routes/             # API blueprints
+│   │   │   ├── auth_routes.py
+│   │   │   ├── profile_routes.py
+│   │   │   ├── skill_routes.py
+│   │   │   ├── job_routes.py
+│   │   │   ├── resume_routes.py
+│   │   │   ├── dashboard_routes.py
+│   │   │   ├── admin_routes.py
+│   │   │   ├── interview_routes.py
+│   │   │   ├── notification_routes.py
+│   │   │   └── placement_routes.py
+│   │   ├── services/           # Business logic
+│   │   │   ├── auth_service.py
+│   │   │   ├── profile_service.py
+│   │   │   ├── skill_analyzer.py
+│   │   │   ├── job_matching.py
+│   │   │   ├── ai_resume_service.py
+│   │   │   ├── resume_generator.py
+│   │   │   ├── resume_parser.py
+│   │   │   ├── placement_predictor.py
+│   │   │   ├── dashboard_service.py
+│   │   │   ├── analytics_service.py
+│   │   │   ├── email_service.py
+│   │   │   └── job_role_knowledge_base.py
+│   │   └── utils/              # Helpers
+│   ├── tests/                  # Unit, integration, property tests
+│   ├── uploads/                # Resume file storage
+│   ├── config.py
+│   ├── run.py
+│   ├── seed.py                 # Seed admin + sample data
+│   ├── seed_courses.py         # Seed course recommendations
+│   └── requirements.txt
+├── frontend/                   # React + TypeScript SPA
+│   ├── src/
+│   │   ├── pages/
+│   │   │   ├── student/        # Dashboard, Profile, Resume, Skills, Jobs, Settings
+│   │   │   └── admin/          # Dashboard, Companies, Jobs, Shortlist, Interviews,
+│   │   │                       # Placements, Notifications, Analytics, UserMgmt, etc.
+│   │   ├── components/         # ProtectedRoute, Toast, LoadingSkeleton, SummaryCard
+│   │   ├── context/            # AuthContext (JWT session management)
+│   │   ├── services/           # Axios API client
+│   │   └── styles/             # Global CSS design system
+│   ├── package.json
+│   └── vite.config.ts
+├── database/
+│   └── schema.sql              # Full MySQL schema (reference)
+├── docker-compose.yml
+├── Dockerfile
+└── README.md
+```
+
+---
+
+## Prerequisites
+
+Make sure you have the following installed:
+
+| Tool | Version | Download |
+|---|---|---|
+| Python | 3.11+ | https://python.org |
+| Node.js | 18+ | https://nodejs.org |
+| MySQL | 8.0+ | https://dev.mysql.com/downloads/ |
+| Git | Latest | https://git-scm.com |
+
+---
+
+## Installation & Setup
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/PUNEETH1307/Skill-2-Job.git
+cd Skill-2-Job
+```
+
+### 2. MySQL Database Setup
+
+Open MySQL and create the database:
+
+```sql
+CREATE DATABASE skillbridge CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+> The tables are created automatically when you first run the backend.
+
+### 3. Backend Setup
+
+```bash
+cd backend
+
+# Create and activate virtual environment
+python -m venv venv
+
+# Windows
+venv\Scripts\activate
+
+# macOS / Linux
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Download SpaCy language model
+python -m spacy download en_core_web_sm
+```
+
+Create your environment file:
+
+```bash
+# Copy the example file
+cp .env.example .env
+```
+
+Edit `backend/.env` with your values:
+
+```env
+FLASK_CONFIG=development
+SECRET_KEY=your-secret-key-here
+JWT_SECRET_KEY=your-jwt-secret-here
+JWT_TOKEN_EXPIRY_MINUTES=60
+
+# Your MySQL credentials
+DATABASE_URL=mysql+pymysql://root:yourpassword@127.0.0.1:3306/skillbridge
+
+SPACY_MODEL=en_core_web_sm
+UPLOAD_FOLDER=uploads
+FRONTEND_URL=http://localhost:3000
+
+# Optional: SMTP for emails (leave empty to log emails in dev)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+FROM_EMAIL=noreply@skillbridge.com
+FROM_NAME=Skill2Job
+```
+
+Initialize the database tables:
+
+```bash
+python -c "
+from app import create_app, db
+app = create_app('development')
+with app.app_context():
+    db.create_all()
+    print('All tables created successfully!')
+"
+```
+
+Seed initial data (skill taxonomy + sample courses):
+
+```bash
+python seed.py
+python seed_courses.py
+```
+
+### 4. Frontend Setup
+
+```bash
+cd ../frontend
+
+# Install dependencies
+npm install --ignore-scripts
+node node_modules/esbuild/install.js
+
+# Copy environment file
+cp .env.example .env
+```
+
+The default `.env` is:
+```env
+VITE_API_BASE_URL=http://localhost:5000/api
+```
+
+---
+
+## Running the Project
+
+You need **two terminals** — one for the backend, one for the frontend.
+
+### Terminal 1 — Backend (Flask)
+
+```bash
+cd backend
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # macOS/Linux
+
+python run.py
+```
+
+Backend runs at: **http://localhost:5000**
+
+### Terminal 2 — Frontend (Vite)
+
+```bash
+cd frontend
+node_modules/.bin/vite --port 3000
+```
+
+Frontend runs at: **http://localhost:3000**
+
+> Open **http://localhost:3000** in your browser.
+
+---
+
+## Default Accounts
+
+After running `seed.py`, the following accounts are created:
+
+| Role | Email | Password | Access |
+|---|---|---|---|
+| **Admin** | `admin@skillbridge.com` | `Admin@1234` | Full system access |
+| **Placement Officer** | `officer@skillbridge.com` | `Officer@1234` | Coordinator dashboard |
+| **Student** | `student@skillbridge.com` | `Student@1234` | Student dashboard |
+
+> **First time setup without seed:** Register at `/register` as a student, then use the setup endpoint to create your first admin:
+> ```bash
+> curl -X POST http://localhost:5000/api/auth/setup \
+>   -H "Content-Type: application/json" \
+>   -d '{"name":"Admin","email":"admin@example.com","password":"Admin@1234","role":"admin"}'
+> ```
+> After that, create more staff via **Admin Panel → User Management**.
+
+---
+
+## API Overview
+
+All API routes are prefixed with `/api`.
+
+| Module | Base Path | Description |
+|---|---|---|
+| Auth | `/api/auth` | Register, login, logout, password reset, role update |
+| Profile | `/api/profile` | Student profile CRUD |
+| Skills | `/api/skills` | Skill analysis |
+| Jobs | `/api/jobs` | Recommendations, skill gap, courses |
+| Resume | `/api/resume` | Upload, parse, generate PDF |
+| Dashboard | `/api/dashboard` | Role-specific summaries |
+| Admin | `/api/admin` | Companies, jobs, shortlist, analytics, users, taxonomy |
+| Interviews | `/api/interviews` | Schedule and manage interviews |
+| Placements | `/api/placements` | Record confirmed placements |
+| Notifications | `/api/notifications` | Send announcements |
+
+---
+
+## Role-Based Access
+
+```
+Admin
+  └── Full access to everything below +
+      └── User Management (create/edit/role-change)
+      └── Skill Taxonomy Management
+
+Placement Officer
+  └── Companies, Job Roles, Shortlisting
+  └── Interviews, Placements, Notifications
+  └── Analytics & Placement Prediction
+
+Student
+  └── Profile, Resume, Skill Analysis
+  └── Job Recommendations, Skill Gap
+  └── Course Recommendations, Settings
+```
+
+Login redirects automatically based on role:
+- `student` → `/student/dashboard`
+- `placement_officer` → `/admin/dashboard` (coordinator view)
+- `admin` → `/admin/dashboard` (admin view)
+
+---
+
+## Environment Variables
+
+### Backend (`backend/.env`)
+
+| Variable | Required | Description |
+|---|---|---|
+| `FLASK_CONFIG` | Yes | `development` / `production` |
+| `SECRET_KEY` | Yes | Flask secret key |
+| `JWT_SECRET_KEY` | Yes | JWT signing key |
+| `JWT_TOKEN_EXPIRY_MINUTES` | No | Token TTL (default: 60) |
+| `DATABASE_URL` | Yes | MySQL connection string |
+| `SPACY_MODEL` | No | SpaCy model (default: `en_core_web_sm`) |
+| `UPLOAD_FOLDER` | No | Resume upload path (default: `uploads`) |
+| `FRONTEND_URL` | No | For email links (default: `http://localhost:3000`) |
+| `SMTP_HOST` | No | SMTP server (leave empty for dev logging) |
+| `SMTP_PORT` | No | SMTP port (default: 587) |
+| `SMTP_USER` | No | SMTP username |
+| `SMTP_PASSWORD` | No | SMTP password |
+
+### Frontend (`frontend/.env`)
+
+| Variable | Required | Description |
+|---|---|---|
+| `VITE_API_BASE_URL` | No | Backend API URL (default: `http://localhost:5000/api`) |
+
+---
+
+## Database Schema
+
+The full schema is in [`database/schema.sql`](database/schema.sql).
+
+Key tables:
+
+| Table | Description |
+|---|---|
+| `user` | All users (students, officers, admins) |
+| `student_profile` | Academic details, skills JSON, skill vector |
+| `company` | Company records |
+| `job_role` | Job positions with skill vectors |
+| `shortlist` | Shortlisted candidates per job |
+| `interview` | Interview scheduling and results |
+| `placement_record` | Confirmed placements with package |
+| `skill_taxonomy` | Canonical skills with categories and synonyms |
+| `course_recommendation` | Courses mapped to skills |
+| `notification` | Sent announcements |
+| `password_reset_token` | Temporary reset tokens |
+
+---
+
+## Docker (Optional)
+
+Run the full stack with Docker Compose:
+
+```bash
+# Build and start all services
+docker-compose up --build
+
+# Stop
+docker-compose down
+```
+
+---
+
+## Running Tests
+
+```bash
+cd backend
+venv\Scripts\activate
+
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=app tests/
+
+# Run only unit tests
+pytest tests/unit/
+
+# Run only integration tests
+pytest tests/integration/
+```
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/your-feature`
+3. Commit your changes: `git commit -m "feat: add your feature"`
+4. Push to the branch: `git push origin feature/your-feature`
+5. Open a Pull Request
 
 ---
 
 ## License
 
-This project is for educational and academic purposes.
+This project is developed as a Major Project submission. All rights reserved.
+
+---
+
+<div align="center">
+  Built with ❤️ by <strong>Puneeth J</strong> · <a href="https://github.com/PUNEETH1307">@PUNEETH1307</a>
+</div>

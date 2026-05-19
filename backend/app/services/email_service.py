@@ -169,14 +169,16 @@ class EmailService:
         return self.send_email(to_email, subject, html_body, plain_body)
 
     def send_placement_confirmation(
-        self, to_email: str, user_name: str, job_title: str, company_name: str
+        self, to_email: str, user_name: str, job_title: str, company_name: str,
+        package_lpa: float | None = None
     ) -> bool:
         """Notify student of confirmed placement."""
-        subject = f"Skill2Job - Placement Confirmed at {company_name}!"
+        package_line = f"<p style='color:#047857;font-weight:600;margin:5px 0 0;'>Package: ₹{package_lpa} LPA</p>" if package_lpa else ""
+        subject = f"SkillBridge - Placement Confirmed at {company_name}!"
         html_body = f"""
         <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <div style="background: linear-gradient(135deg, #10b981, #059669); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-                <h1 style="color: white; margin: 0; font-size: 24px;">Skill2Job</h1>
+                <h1 style="color: white; margin: 0; font-size: 24px;">SkillBridge</h1>
             </div>
             <div style="background: #ffffff; padding: 30px; border: 1px solid #e2e8f0; border-radius: 0 0 12px 12px;">
                 <h2 style="color: #1e293b; margin-top: 0;">🎊 Placement Confirmed!</h2>
@@ -185,13 +187,72 @@ class EmailService:
                 <div style="background: #d1fae5; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #a7f3d0;">
                     <p style="margin: 0; font-weight: 600; color: #065f46; font-size: 18px;">{job_title}</p>
                     <p style="margin: 5px 0 0; color: #047857;">{company_name}</p>
+                    {package_line}
                 </div>
                 <p style="color: #64748b;">Congratulations on this achievement! Your hard work has paid off.</p>
             </div>
         </div>
         """
         plain_body = f"Hi {user_name},\n\nYour placement is confirmed!\n\nRole: {job_title}\nCompany: {company_name}\n\nCongratulations!"
+        return self.send_email(to_email, subject, html_body, plain_body)
 
+    def send_interview_scheduled(
+        self, to_email: str, user_name: str, job_title: str, company_name: str,
+        interview_date: str, interview_time: str, mode: str, venue_or_link: str
+    ) -> bool:
+        """Notify student that an interview has been scheduled."""
+        subject = f"SkillBridge - Interview Scheduled: {job_title} at {company_name}"
+        venue_label = "Meeting Link" if mode == "online" else "Venue"
+        html_body = f"""
+        <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #f59e0b, #d97706); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 24px;">SkillBridge</h1>
+            </div>
+            <div style="background: #ffffff; padding: 30px; border: 1px solid #e2e8f0; border-radius: 0 0 12px 12px;">
+                <h2 style="color: #1e293b; margin-top: 0;">📅 Interview Scheduled</h2>
+                <p style="color: #64748b;">Hi {user_name},</p>
+                <p style="color: #64748b;">An interview has been scheduled for you:</p>
+                <div style="background: #fffbeb; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #fde68a;">
+                    <p style="margin: 0; font-weight: 600; color: #1e293b; font-size: 18px;">{job_title}</p>
+                    <p style="margin: 5px 0 0; color: #92400e;">{company_name}</p>
+                    <p style="margin: 12px 0 0; color: #1e293b;"><strong>Date:</strong> {interview_date}</p>
+                    <p style="margin: 4px 0 0; color: #1e293b;"><strong>Time:</strong> {interview_time}</p>
+                    <p style="margin: 4px 0 0; color: #1e293b;"><strong>Mode:</strong> {mode.title()}</p>
+                    <p style="margin: 4px 0 0; color: #1e293b;"><strong>{venue_label}:</strong> {venue_or_link or 'TBD'}</p>
+                </div>
+                <p style="color: #64748b;">Please be prepared and arrive/join on time. Best of luck!</p>
+            </div>
+        </div>
+        """
+        plain_body = (
+            f"Hi {user_name},\n\nInterview scheduled!\n\n"
+            f"Role: {job_title}\nCompany: {company_name}\n"
+            f"Date: {interview_date}\nTime: {interview_time}\n"
+            f"Mode: {mode}\n{venue_label}: {venue_or_link or 'TBD'}\n\nBest of luck!"
+        )
+        return self.send_email(to_email, subject, html_body, plain_body)
+
+    def send_announcement(
+        self, to_email: str, user_name: str, title: str, message: str
+    ) -> bool:
+        """Send a general announcement/notification to a user."""
+        subject = f"SkillBridge - {title}"
+        html_body = f"""
+        <div style="font-family: 'Inter', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #4f46e5, #7c3aed); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 24px;">SkillBridge</h1>
+            </div>
+            <div style="background: #ffffff; padding: 30px; border: 1px solid #e2e8f0; border-radius: 0 0 12px 12px;">
+                <h2 style="color: #1e293b; margin-top: 0;">📢 {title}</h2>
+                <p style="color: #64748b;">Hi {user_name},</p>
+                <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4f46e5;">
+                    <p style="margin: 0; color: #334155; line-height: 1.6;">{message}</p>
+                </div>
+                <p style="color: #94a3b8; font-size: 13px;">Log in to your SkillBridge dashboard for more details.</p>
+            </div>
+        </div>
+        """
+        plain_body = f"Hi {user_name},\n\n{title}\n\n{message}"
         return self.send_email(to_email, subject, html_body, plain_body)
 
     def send_profile_reminder(self, to_email: str, user_name: str, completeness: int) -> bool:

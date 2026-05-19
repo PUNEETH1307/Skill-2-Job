@@ -13,8 +13,8 @@ interface JobRecommendation {
 
 interface PredictionData {
   probability: number;
-  confidence: string;
-  factors: Array<{ factor: string; impact: string }>;
+  confidence?: string;
+  factors?: Array<{ factor: string; impact: string }>;
 }
 
 interface StudentDashboardData {
@@ -41,8 +41,21 @@ export default function StudentDashboard() {
         api.get('/dashboard/student'),
         api.get('/dashboard/student/prediction'),
       ]);
-      if (dashRes.status === 'fulfilled') setData(dashRes.value.data);
-      if (predRes.status === 'fulfilled') setPrediction(predRes.value.data);
+
+      if (dashRes.status === 'fulfilled') {
+        setData(dashRes.value.data);
+      }
+
+      if (predRes.status === 'fulfilled') {
+        const pred = predRes.value.data;
+        // Only set prediction if it has valid data (no error key)
+        if (pred && typeof pred.probability === 'number' && !pred.error) {
+          setPrediction(pred);
+        } else {
+          // Provide safe defaults so the ring still renders
+          setPrediction({ probability: 0, confidence: 'low', factors: [] });
+        }
+      }
     } catch {
       showToast('Failed to load dashboard', 'error');
     } finally {
@@ -62,11 +75,17 @@ export default function StudentDashboard() {
 
   const readinessScore = prediction?.probability ?? 0;
   const profileComplete = data?.profile_completeness ?? 0;
+  const factors = prediction?.factors ?? [];
 
   if (loading) {
     return (
       <div className="student-layout">
-        <StudentSidebar active="dashboard" sidebarOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} onLogout={handleLogout} />
+        <StudentSidebar
+          active="dashboard"
+          sidebarOpen={sidebarOpen}
+          onToggle={() => setSidebarOpen(!sidebarOpen)}
+          onLogout={handleLogout}
+        />
         <main className="student-main">
           <div className="dash-loading">Loading dashboard...</div>
         </main>
@@ -74,81 +93,107 @@ export default function StudentDashboard() {
     );
   }
 
+  const ringColor =
+    readinessScore >= 70 ? '#10b981' : readinessScore >= 40 ? '#f59e0b' : '#ef4444';
+
   return (
     <div className="student-layout">
-      <StudentSidebar active="dashboard" sidebarOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} onLogout={handleLogout} />
+      <StudentSidebar
+        active="dashboard"
+        sidebarOpen={sidebarOpen}
+        onToggle={() => setSidebarOpen(!sidebarOpen)}
+        onLogout={handleLogout}
+      />
 
       <main className="student-main">
         {/* Mobile header */}
-        <button className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>☰</button>
+        <button className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>
+          ☰
+        </button>
 
-        {/* Welcome Section */}
+        {/* Welcome */}
         <div className="welcome-section">
-          <div>
-            <h1 className="welcome-title">Welcome back, {user?.name ?? 'Student'}! 👋</h1>
-            <p className="welcome-sub">Here's your placement journey overview</p>
-          </div>
+          <h1 className="welcome-title">Welcome back, {user?.name ?? 'Student'}! 👋</h1>
+          <p className="welcome-sub">Here's your placement journey overview</p>
         </div>
 
         {/* Stats Grid */}
         <div className="stats-grid-student">
-          <div className="stat-widget stat-widget-primary">
+          <div className="stat-widget stat-widget-primary" style={{ opacity: 1 }}>
             <div className="stat-widget-icon">🎯</div>
             <div className="stat-widget-value">{readinessScore.toFixed(0)}%</div>
             <div className="stat-widget-label">Placement Readiness</div>
           </div>
-          <div className="stat-widget stat-widget-success">
+          <div className="stat-widget stat-widget-success" style={{ opacity: 1 }}>
             <div className="stat-widget-icon">📊</div>
             <div className="stat-widget-value">{profileComplete}%</div>
             <div className="stat-widget-label">Profile Complete</div>
           </div>
-          <div className="stat-widget stat-widget-info">
+          <div className="stat-widget stat-widget-info" style={{ opacity: 1 }}>
             <div className="stat-widget-icon">💼</div>
             <div className="stat-widget-value">{data?.matched_job_count ?? 0}</div>
             <div className="stat-widget-label">Matched Jobs</div>
           </div>
-          <div className="stat-widget stat-widget-accent">
+          <div className="stat-widget stat-widget-accent" style={{ opacity: 1 }}>
             <div className="stat-widget-icon">🛠️</div>
             <div className="stat-widget-value">{data?.skill_count ?? 0}</div>
             <div className="stat-widget-label">Skills</div>
           </div>
         </div>
 
+        {/* Profile incomplete banner */}
+        {profileComplete < 50 && (
+          <div className="alert alert-warning" style={{ marginBottom: '1.5rem' }}>
+            Your profile is only <strong>{profileComplete}%</strong> complete.{' '}
+            <Link to="/student/profile" style={{ fontWeight: 600 }}>
+              Complete your profile →
+            </Link>{' '}
+            to unlock job recommendations and AI resume generation.
+          </div>
+        )}
+
         {/* Two Column Layout */}
         <div className="dashboard-grid-2col">
           {/* Left Column */}
           <div className="dashboard-col">
-            {/* Placement Prediction */}
-            {prediction && (
-              <div className="dash-widget">
-                <h3 className="dash-widget-title">🤖 AI Placement Prediction</h3>
-                <div className="prediction-ring-container">
-                  <div className="prediction-ring">
-                    <svg viewBox="0 0 100 100" className="prediction-svg">
-                      <circle cx="50" cy="50" r="42" fill="none" stroke="#e2e8f0" strokeWidth="8" />
-                      <circle cx="50" cy="50" r="42" fill="none"
-                        stroke={readinessScore >= 70 ? '#10b981' : readinessScore >= 40 ? '#f59e0b' : '#ef4444'}
-                        strokeWidth="8" strokeLinecap="round"
-                        strokeDasharray={`${readinessScore * 2.64} 264`}
-                        transform="rotate(-90 50 50)" />
-                    </svg>
-                    <span className="prediction-ring-value">{readinessScore.toFixed(0)}%</span>
-                  </div>
-                  <div className="prediction-factors">
-                    {prediction.factors.map((f, i) => (
+            {/* AI Placement Prediction */}
+            <div className="dash-widget">
+              <h3 className="dash-widget-title">🤖 AI Placement Prediction</h3>
+              <div className="prediction-ring-container">
+                <div className="prediction-ring">
+                  <svg viewBox="0 0 100 100" className="prediction-svg">
+                    <circle cx="50" cy="50" r="42" fill="none" stroke="#e2e8f0" strokeWidth="8" />
+                    <circle
+                      cx="50" cy="50" r="42" fill="none"
+                      stroke={ringColor}
+                      strokeWidth="8"
+                      strokeLinecap="round"
+                      strokeDasharray={`${readinessScore * 2.64} 264`}
+                      transform="rotate(-90 50 50)"
+                    />
+                  </svg>
+                  <span className="prediction-ring-value">{readinessScore.toFixed(0)}%</span>
+                </div>
+                <div className="prediction-factors">
+                  {factors.length > 0 ? (
+                    factors.map((f, i) => (
                       <span key={i} className={`factor-badge factor-${f.impact}`}>
                         {f.impact === 'positive' ? '✓' : '✕'} {f.factor}
                       </span>
-                    ))}
-                  </div>
+                    ))
+                  ) : (
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                      Complete your profile to get a detailed prediction.
+                    </p>
+                  )}
                 </div>
               </div>
-            )}
+            </div>
 
             {/* Skill Breakdown */}
-            {data && data.skill_count > 0 && (
-              <div className="dash-widget">
-                <h3 className="dash-widget-title">📈 Skill Distribution</h3>
+            <div className="dash-widget">
+              <h3 className="dash-widget-title">📈 Skill Distribution</h3>
+              {data && data.skill_count > 0 ? (
                 <div className="skill-bars">
                   {Object.entries(data.skill_breakdown).map(([category, count]) => (
                     <div key={category} className="skill-bar-item">
@@ -157,13 +202,21 @@ export default function StudentDashboard() {
                         <span className="skill-bar-count">{count}</span>
                       </div>
                       <div className="skill-bar-track">
-                        <div className="skill-bar-fill" style={{ width: `${Math.min(100, (count / data.skill_count) * 100)}%` }} />
+                        <div
+                          className="skill-bar-fill"
+                          style={{ width: `${Math.min(100, (count / data.skill_count) * 100)}%` }}
+                        />
                       </div>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <p className="empty-text">
+                  No skills added yet.{' '}
+                  <Link to="/student/profile">Add skills to your profile →</Link>
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Right Column */}
@@ -182,16 +235,26 @@ export default function StudentDashboard() {
                         <span className="job-rec-title">{rec.title}</span>
                         <span className="job-rec-company">{rec.company_name}</span>
                       </div>
-                      <div className="job-rec-score" style={{
-                        color: rec.compatibility_score >= 70 ? '#10b981' : rec.compatibility_score >= 40 ? '#f59e0b' : '#ef4444'
-                      }}>
+                      <div
+                        className="job-rec-score"
+                        style={{
+                          color:
+                            rec.compatibility_score >= 70
+                              ? '#10b981'
+                              : rec.compatibility_score >= 40
+                                ? '#f59e0b'
+                                : '#ef4444',
+                        }}
+                      >
                         {rec.compatibility_score.toFixed(0)}%
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="empty-text">Complete your profile to get job recommendations.</p>
+                <p className="empty-text">
+                  Complete your profile to get job recommendations.
+                </p>
               )}
             </div>
 
@@ -228,7 +291,7 @@ export default function StudentDashboard() {
   );
 }
 
-/* Sidebar Component */
+/* ── Sidebar ── */
 interface SidebarProps {
   active: string;
   sidebarOpen: boolean;

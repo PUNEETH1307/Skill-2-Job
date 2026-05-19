@@ -16,4 +16,6 @@ from app.models.models import (  # noqa: F401
     PlacementRecord,
     ResumeUpload,
     PasswordResetToken,
+    Interview,
+    Notification,
 )

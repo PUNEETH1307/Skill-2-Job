@@ -131,6 +131,17 @@ export default function UserManagement() {
     }
   };
 
+  const changeRole = async (u: UserRecord, newRole: string) => {
+    if (u.role === newRole) return;
+    if (!confirm(`Change ${u.name}'s role from "${u.role}" to "${newRole}"?`)) return;
+    try {
+      await api.post('/auth/update-role', { user_id: u.id, role: newRole });
+      await fetchUsers();
+    } catch {
+      setError('Failed to update user role.');
+    }
+  };
+
   return (
     <div className="page-container-wide">
       <div className="page-header-narrow">
@@ -282,7 +293,22 @@ export default function UserManagement() {
                     <td>{u.id}</td>
                     <td>{u.name}</td>
                     <td>{u.email}</td>
-                    <td>{u.role}</td>
+                    <td>
+                      <select
+                        value={u.role}
+                        onChange={(e) => changeRole(u, e.target.value)}
+                        style={{
+                          padding: '3px 8px', borderRadius: '6px', border: '1px solid var(--border)',
+                          fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+                          background: u.role === 'admin' ? '#fef3c7' : u.role === 'placement_officer' ? '#dbeafe' : '#d1fae5',
+                          color: u.role === 'admin' ? '#92400e' : u.role === 'placement_officer' ? '#1e40af' : '#065f46',
+                        }}
+                      >
+                        <option value="student">student</option>
+                        <option value="placement_officer">placement_officer</option>
+                        <option value="admin">admin</option>
+                      </select>
+                    </td>
                     <td>
                       <span className={u.status === 'active' ? 'status-active' : 'status-inactive'}>
                         {u.status}

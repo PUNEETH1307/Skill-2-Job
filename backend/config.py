@@ -36,9 +36,16 @@ class TestingConfig(Config):
 class ProductionConfig(Config):
     """Production configuration."""
     DEBUG = False
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
     SECRET_KEY = os.environ.get('SECRET_KEY')
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
+
+    @property
+    def SQLALCHEMY_DATABASE_URI(self):
+        url = os.environ.get('DATABASE_URL', '')
+        # Aiven MySQL URLs sometimes use 'mysql://' — ensure pymysql driver
+        if url.startswith('mysql://'):
+            url = url.replace('mysql://', 'mysql+pymysql://', 1)
+        return url
 
 
 config_by_name = {

@@ -3,194 +3,249 @@
 ## Architecture
 
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   Vercel/       │────▶│   Render/        │────▶│   MySQL Cloud   │
-│   Netlify       │     │   Railway        │     │   (PlanetScale/ │
-│   (Frontend)    │     │   (Backend)      │     │    Aiven/AWS)   │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
-     React SPA           Flask + Gunicorn          Persistent DB
+Browser
+  │
+  ▼
+┌─────────────────────┐        ┌──────────────────────┐        ┌──────────────────┐
+│      Vercel         │──API──▶│      Render.com      │──DB──▶│     Aiven.io     │
+│   (React Frontend)  │        │   (Flask Backend)    │        │  (MySQL Cloud)   │
+│   skill2job.vercel  │        │  skill2job.onrender  │        │  Free 5GB MySQL  │
+│   .app  — FREE      │        │  .com  — FREE        │        │  — FREE          │
+└─────────────────────┘        └──────────────────────┘        └──────────────────┘
 ```
+
+**All three services are FREE.** Users register → data is stored in Aiven MySQL → accessible from anywhere.
 
 ---
 
-## Option 1: Render (Backend) + Vercel (Frontend)
+## Step 1 — Set Up Aiven MySQL (Cloud Database)
 
-### Backend — Render
+1. Go to **https://aiven.io** → Sign up (free, no credit card needed for free trial)
 
-1. **Create a Render account** at https://render.com
+2. Click **Create Service** → Choose **MySQL**
 
-2. **Connect your GitHub repo** and create a new Web Service:
-   - Root Directory: `backend`
-   - Runtime: Python 3
-   - Build Command:
-     ```bash
-     pip install -r requirements.txt && pip install gunicorn && python -m spacy download en_core_web_sm
-     ```
-   - Start Command:
-     ```bash
-     gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 run:app
-     ```
+3. Select:
+   - Plan: **Free** (or Hobbyist)
+   - Cloud: **AWS** → Region: **us-east-1** (or closest to you)
+   - Service name: `skill2job-db`
 
-3. **Set environment variables** on Render:
+4. Wait ~2 minutes for it to provision
+
+5. Click your service → go to **Overview** tab → copy the **Service URI**
+   It looks like:
    ```
-   FLASK_CONFIG=production
-   SECRET_KEY=<generate-random-64-char-string>
-   JWT_SECRET_KEY=<generate-random-64-char-string>
-   JWT_TOKEN_EXPIRY_MINUTES=60
-   DATABASE_URL=mysql+pymysql://user:pass@host:3306/skill2job
-   SPACY_MODEL=en_core_web_sm
+   mysql://avnadmin:YOURPASSWORD@mysql-skill2job-xxx.aivencloud.com:PORT/defaultdb?ssl-mode=REQUIRED
    ```
 
-4. **Create a MySQL database** (Render offers PostgreSQL free; for MySQL use PlanetScale or Aiven):
-   - PlanetScale: https://planetscale.com (free tier)
-   - Aiven: https://aiven.io (free trial)
-   - Run `database/schema.sql` against your cloud DB
+6. Go to **Databases** tab → Create a new database named `skillbridge`
 
-5. **Seed the database**:
+7. Your final connection string will be:
+   ```
+   mysql+pymysql://avnadmin:YOURPASSWORD@mysql-skill2job-xxx.aivencloud.com:PORT/skillbridge?ssl_ca=/etc/ssl/certs/ca-certificates.crt
+   ```
+   > **Save this** — you'll need it for Render.
+
+8. Go to **CA Certificate** tab → Download the CA cert (needed for SSL)
+
+---
+
+## Step 2 — Deploy Backend on Render
+
+1. Go to **https://render.com** → Sign up with GitHub
+
+2. Click **New** → **Web Service**
+
+3. Connect your GitHub repo: `PUNEETH1307/Skill-2-Job`
+
+4. Configure:
+   | Setting | Value |
+   |---|---|
+   | **Name** | `skill2job-backend` |
+   | **Root Directory** | `backend` |
+   | **Runtime** | `Python 3` |
+   | **Build Command** | `pip install -r requirements.txt && python -m spacy download en_core_web_sm` |
+   | **Start Command** | `gunicorn --config gunicorn.conf.py run:app` |
+   | **Plan** | Free |
+
+5. Click **Advanced** → **Add Environment Variables**:
+
+   | Key | Value |
+   |---|---|
+   | `FLASK_CONFIG` | `production` |
+   | `DATABASE_URL` | *(your Aiven MySQL URI from Step 1)* |
+   | `SECRET_KEY` | *(click Generate)* |
+   | `JWT_SECRET_KEY` | *(click Generate)* |
+   | `JWT_TOKEN_EXPIRY_MINUTES` | `60` |
+   | `SPACY_MODEL` | `en_core_web_sm` |
+   | `CORS_ORIGINS` | `https://your-app.vercel.app` *(update after Step 3)* |
+   | `FRONTEND_URL` | `https://your-app.vercel.app` *(update after Step 3)* |
+
+6. Click **Create Web Service** → wait for build (~5 min)
+
+7. Once deployed, your backend URL will be:
+   ```
+   https://skill2job-backend.onrender.com
+   ```
+
+8. **Initialize the database** — open Render **Shell** tab and run:
    ```bash
-   # From Render shell or locally with DATABASE_URL set
+   python -c "
+   from app import create_app, db
+   app = create_app('production')
+   with app.app_context():
+       db.create_all()
+       print('Tables created!')
+   "
+   ```
+
+9. **Seed initial data**:
+   ```bash
    python seed.py
    python seed_courses.py
    ```
 
-### Frontend — Vercel
+10. **Create your first admin** via Render Shell:
+    ```bash
+    curl -X POST https://skill2job-backend.onrender.com/api/auth/setup \
+      -H "Content-Type: application/json" \
+      -d '{"name":"Admin","email":"admin@yourdomain.com","password":"YourPassword@123","role":"admin"}'
+    ```
 
-1. **Create a Vercel account** at https://vercel.com
+---
 
-2. **Import your repo** and set:
-   - Framework: Vite
-   - Root Directory: `frontend`
-   - Build Command: `npm run build`
-   - Output Directory: `dist`
+## Step 3 — Deploy Frontend on Vercel
 
-3. **Set environment variable**:
+1. Go to **https://vercel.com** → Sign up with GitHub
+
+2. Click **Add New** → **Project**
+
+3. Import your repo: `PUNEETH1307/Skill-2-Job`
+
+4. Configure:
+   | Setting | Value |
+   |---|---|
+   | **Framework Preset** | `Vite` |
+   | **Root Directory** | `frontend` |
+   | **Build Command** | `npm run build` |
+   | **Output Directory** | `dist` |
+
+5. **Environment Variables**:
+   | Key | Value |
+   |---|---|
+   | `VITE_API_BASE_URL` | `https://skill2job-backend.onrender.com/api` |
+
+6. Click **Deploy** → wait ~2 min
+
+7. Your frontend URL will be:
    ```
-   VITE_API_BASE_URL=https://your-backend.onrender.com/api
+   https://skill-2-job.vercel.app
    ```
 
-4. **Update `frontend/src/services/api.ts`** for production:
-   ```typescript
-   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
+---
+
+## Step 4 — Connect Frontend ↔ Backend
+
+1. Go back to **Render** → your backend service → **Environment**
+
+2. Update these two variables with your actual Vercel URL:
+   ```
+   CORS_ORIGINS = https://skill-2-job.vercel.app
+   FRONTEND_URL = https://skill-2-job.vercel.app
    ```
 
-5. **Deploy** — Vercel auto-deploys on push to main.
+3. Click **Save Changes** → Render auto-redeploys
+
+4. Test the connection:
+   ```
+   https://skill-2-job.vercel.app  →  opens the app
+   https://skill2job-backend.onrender.com/api/auth/login  →  returns JSON
+   ```
 
 ---
 
-## Option 2: Railway (Full Stack)
+## Step 5 — Verify Everything Works
 
-1. **Create a Railway account** at https://railway.app
+Open your Vercel URL and test:
 
-2. **Create a new project** from your GitHub repo
-
-3. **Add a MySQL service** from Railway's marketplace
-
-4. **Add the backend service**:
-   - Root: `/backend`
-   - Start: `gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 run:app`
-   - Variables: Same as Render above (Railway auto-provides `DATABASE_URL`)
-
-5. **Add the frontend service**:
-   - Root: `/frontend`
-   - Build: `npm run build`
-   - Serve the `dist/` folder with a static file server
+- [ ] Register a new student account
+- [ ] Login → redirects to student dashboard
+- [ ] Complete profile → skills show in Skill Analysis
+- [ ] Login as admin → admin dashboard loads
+- [ ] Admin → User Management → users visible
 
 ---
 
-## Option 3: Docker (Self-hosted / VPS)
+## Auto-Deploy on Push
 
-```bash
-# Clone the repo
-git clone https://github.com/your-repo/skill2job.git
-cd skill2job
-
-# Create .env file
-cp .env.example .env
-# Edit .env with your production secrets
-
-# Build and start all services
-docker-compose up -d --build
-
-# Seed the database
-docker-compose exec backend python seed.py
-docker-compose exec backend python seed_courses.py
-
-# Access the app
-# Frontend: http://localhost:80
-# Backend API: http://localhost:5000
-```
+Both Vercel and Render watch your GitHub repo. Every time you push to `main`:
+- Vercel rebuilds the frontend automatically
+- Render rebuilds the backend automatically
 
 ---
 
-## Environment Variables Reference
+## Free Tier Limits
 
-### Backend
+| Service | Limit | Impact |
+|---|---|---|
+| Render (free) | Spins down after 15 min inactivity | First request after idle takes ~30 sec to wake up |
+| Aiven (free trial) | 30 days, then needs upgrade | Use Clever Cloud or PlanetScale for permanent free MySQL |
+| Vercel (free) | 100GB bandwidth/month | More than enough |
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `FLASK_CONFIG` | Yes | `production` |
-| `SECRET_KEY` | Yes | Random 64-char string for Flask sessions |
-| `JWT_SECRET_KEY` | Yes | Random 64-char string for JWT signing |
-| `JWT_TOKEN_EXPIRY_MINUTES` | No | Token lifetime (default: 30) |
-| `DATABASE_URL` | Yes | MySQL connection string |
-| `SPACY_MODEL` | No | SpaCy model name (default: `en_core_web_sm`) |
-| `UPLOAD_FOLDER` | No | File upload directory (default: `uploads`) |
-| `PORT` | No | Server port (default: 5000, auto-set by Render/Railway) |
+### Permanent Free MySQL Alternatives
 
-### Frontend
+If Aiven trial expires, use one of these:
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `VITE_API_BASE_URL` | Yes | Backend API URL (e.g., `https://api.skill2job.com/api`) |
+**Option A — Clever Cloud (permanent free MySQL)**
+1. Go to https://clever-cloud.com → Sign up
+2. Create → MySQL addon → Free plan (256MB)
+3. Copy the connection string → update `DATABASE_URL` on Render
 
----
-
-## CI/CD Pipeline
-
-The GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every push:
-
-1. **Backend Tests** — Unit, integration, and property-based tests
-2. **Frontend Build** — TypeScript check + Vite build
-3. **Deploy** (main branch only) — Auto-deploys to Render + Vercel
-
-### Required GitHub Secrets
-
-| Secret | Service |
-|--------|---------|
-| `RENDER_SERVICE_ID` | Render backend service ID |
-| `RENDER_API_KEY` | Render API key |
-| `VERCEL_TOKEN` | Vercel deployment token |
-| `VERCEL_ORG_ID` | Vercel organization ID |
-| `VERCEL_PROJECT_ID` | Vercel project ID |
+**Option B — PlanetScale (permanent free)**
+1. Go to https://planetscale.com → Sign up
+2. Create database → Connect → copy connection string
+3. Note: PlanetScale uses a different SSL setup — add `?ssl=true` to URL
 
 ---
 
-## Database Migration (Production)
+## Troubleshooting
 
-```bash
-# Connect to your cloud MySQL and run:
-mysql -h <host> -u <user> -p <database> < database/schema.sql
+**Backend not starting on Render:**
+- Check Render logs → look for `ModuleNotFoundError`
+- Make sure `requirements.txt` has `cryptography==44.0.2` for MySQL SSL
 
-# Or via the backend container:
-docker-compose exec backend python seed.py
-```
+**CORS error in browser:**
+- Make sure `CORS_ORIGINS` on Render exactly matches your Vercel URL (no trailing slash)
+
+**Database connection error:**
+- Aiven requires SSL — make sure your `DATABASE_URL` includes `?ssl_ca=...` or use `?ssl=true`
+- Test locally: `mysql -h <host> -P <port> -u avnadmin -p skillbridge`
+
+**Render free tier cold start:**
+- First request after 15 min idle takes ~30 seconds
+- Upgrade to Render Starter ($7/month) to avoid this
+
+**SpaCy model not found:**
+- Build command must include `python -m spacy download en_core_web_sm`
+- Check Render build logs to confirm it downloaded
 
 ---
 
-## SSL/HTTPS
+## Custom Domain (Optional)
 
-- **Vercel**: Automatic SSL on custom domains
-- **Render**: Automatic SSL on `.onrender.com` and custom domains
-- **Railway**: Automatic SSL
-- **Docker/VPS**: Use Caddy or nginx with Let's Encrypt
+**Vercel:**
+1. Vercel Dashboard → your project → Settings → Domains
+2. Add your domain → follow DNS instructions
+
+**Render:**
+1. Render Dashboard → your service → Settings → Custom Domains
+2. Add domain → update CORS_ORIGINS to match
 
 ---
 
-## Monitoring
+## Summary
 
-- **Render**: Built-in logs and metrics
-- **Railway**: Built-in observability
-- **Self-hosted**: Add Sentry for error tracking:
-  ```bash
-  pip install sentry-sdk[flask]
-  ```
+| What | Where | URL |
+|---|---|---|
+| Frontend | Vercel | `https://skill-2-job.vercel.app` |
+| Backend API | Render | `https://skill2job-backend.onrender.com` |
+| Database | Aiven | MySQL cloud (not publicly accessible) |

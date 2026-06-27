@@ -45,10 +45,12 @@ def create_app(config_name='default'):
     if upload_folder:
         os.makedirs(upload_folder, exist_ok=True)
 
-    # CORS: in development the React dev server runs on a separate port
-    # (e.g. 3000) so we need permissive origins.  In production the SPA
-    # is served from the same origin so CORS headers are harmless.
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    # CORS — allow Vercel frontend in production, all origins in dev
+    allowed_origins = os.environ.get(
+        'CORS_ORIGINS',
+        '*'  # dev default; set CORS_ORIGINS=https://your-app.vercel.app in production
+    )
+    CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
 
     # Import models so SQLAlchemy registers them for migrations and create_all
     from app import models  # noqa: F401

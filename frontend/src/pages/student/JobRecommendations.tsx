@@ -6,7 +6,7 @@ import { AxiosError } from 'axios';
 interface JobRecommendation {
   job_role_id: number;
   title: string;
-  company: string;
+  company_name: string;
   compatibility_score: number;
   required_skills: string[];
 }
@@ -68,10 +68,10 @@ export default function JobRecommendations() {
               <div className="job-card-header">
                 <div>
                   <h3 className="job-title">{job.title}</h3>
-                  <p className="job-company">{job.company}</p>
+                  <p className="job-company">{job.company_name}</p>
                 </div>
                 <div className="score-badge">
-                  {Math.round(job.compatibility_score * 100)}%
+                  {Math.round(job.compatibility_score)}%
                 </div>
               </div>
               <div className="skills-row">

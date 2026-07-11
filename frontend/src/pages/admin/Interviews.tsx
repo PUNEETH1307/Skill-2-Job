@@ -23,7 +23,6 @@ interface InterviewRecord {
 
 interface Company { id: number; name: string; }
 interface JobRole { id: number; title: string; company_id: number; }
-interface StudentProfile { id: number; user_id: number; }
 interface UserRecord { id: number; name: string; profile?: { id: number }; }
 
 const STATUS_COLORS: Record<string, string> = {

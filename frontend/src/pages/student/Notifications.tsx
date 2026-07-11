@@ -35,7 +35,7 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function StudentNotifications() {
-    const { user, logout } = useAuth();
+    const { logout } = useAuth();
     const { showToast } = useToast();
     const navigate = useNavigate();
     const [notifications, setNotifications] = useState<NotificationRecord[]>([]);

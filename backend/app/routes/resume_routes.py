@@ -310,16 +310,35 @@ def download_upload(upload_id: int):
 def generate_resume():
     """Generate a resume for the authenticated student.
 
-    Validates the student's profile and generates a PDF resume.
-    Returns 200 on success or 400 if the profile is missing required fields.
+    Accepts optional JSON body:
+        template (str): Template ID — classic, modern, minimal,
+                        sidebar, executive, photo_classic,
+                        photo_modern, photo_sidebar. Default: classic.
+        profile_override (dict): Optional field overrides to fill
+                                 missing profile data inline.
     """
     user_id = g.current_user["user_id"]
 
+    json_data = request.get_json(silent=True) or {}
+    template_id = json_data.get("template", "classic")
+    profile_override = json_data.get("profile_override", {})
+
     try:
         generator = ResumeGenerator()
-        pdf_bytes = generator.generate_resume(user_id)
+        pdf_bytes = generator.generate_resume(
+            user_id,
+            template_id=template_id,
+            profile_override=profile_override,
+        )
         user = db.session.get(User, user_id)
         filename = generator.get_download_filename(user.name if user else "Student")
+
+        generated_folder = os.path.join(current_app.config.get('UPLOAD_FOLDER'), 'generated_resumes')
+        os.makedirs(generated_folder, exist_ok=True)
+        generated_path = os.path.join(generated_folder, f"{user_id}.pdf")
+        with open(generated_path, 'wb') as pdf_file:
+            pdf_file.write(pdf_bytes)
+
         return jsonify({
             "message": "Resume generated successfully",
             "filename": filename,
@@ -349,16 +368,28 @@ def generate_resume():
 @jwt_required
 @role_required("student")
 def download_resume():
-    """Download the authenticated student's resume as a PDF attachment.
-
-    Generates the PDF on-the-fly from the latest profile data and
-    returns it with the appropriate Content-Disposition header.
-    """
+    """Download the student's resume as PDF. Accepts ?template= query param."""
     user_id = g.current_user["user_id"]
+    template_id = request.args.get("template", "classic")
 
     try:
+        generated_folder = os.path.join(current_app.config.get('UPLOAD_FOLDER'), 'generated_resumes')
+        generated_path = os.path.join(generated_folder, f"{user_id}.pdf")
+
+        if os.path.exists(generated_path):
+            user = db.session.get(User, user_id)
+            generator = ResumeGenerator()
+            filename = generator.get_download_filename(user.name if user else "Student")
+            return send_from_directory(
+                generated_folder,
+                f"{user_id}.pdf",
+                as_attachment=True,
+                download_name=filename,
+                mimetype="application/pdf",
+            )
+
         generator = ResumeGenerator()
-        pdf_bytes = generator.generate_resume(user_id)
+        pdf_bytes = generator.generate_resume(user_id, template_id=template_id)
 
         user = db.session.get(User, user_id)
         filename = generator.get_download_filename(user.name)

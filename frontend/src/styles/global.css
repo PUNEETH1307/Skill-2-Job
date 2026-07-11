@@ -800,6 +800,312 @@ textarea.input {
   color: white;
 }
 
+/* ---------- Modal (simple) ---------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.5);
+  z-index: 2000;
+  padding: var(--sp-6);
+}
+
+.modal-content {
+  width: 100%;
+  max-width: 780px;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-6);
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--border);
+  animation: scaleIn 0.2s ease;
+}
+
+.modal h3 {
+  margin-bottom: var(--sp-2);
+}
+
+/* ---------- Template thumbnails ---------- */
+.template-grid {
+  display: flex;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.resume-template-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.2fr);
+  gap: var(--sp-6);
+  align-items: start;
+}
+
+.resume-template-card {
+  width: 100%;
+  text-align: left;
+  padding: 0;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+}
+
+.resume-template-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.resume-template-card.selected {
+  border-color: var(--primary-200);
+  box-shadow: var(--shadow-glow);
+}
+
+.template-card-body {
+  padding: var(--sp-4);
+}
+
+.template-action {
+  display: inline-flex;
+  margin-top: var(--sp-2);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--primary-dark);
+}
+
+.template-preview {
+  min-height: 220px;
+  padding: var(--sp-4);
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+}
+
+.resume-preview-paper {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: var(--sp-6);
+  box-shadow: var(--shadow-lg);
+}
+
+.resume-preview-classic {
+  border-top: 5px solid #1a237e;
+}
+
+.resume-preview-modern {
+  border-top: 5px solid #0d9488;
+}
+
+.resume-preview-minimal {
+  border-top: 5px solid #111827;
+}
+
+.template-preview-header,
+.resume-preview-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.template-preview-name,
+.resume-preview-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.template-preview-role,
+.resume-preview-role {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.template-preview-dot,
+.resume-preview-accent {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.template-preview-section,
+.resume-preview-section-block {
+  margin-top: var(--sp-4);
+}
+
+.template-preview-section-title,
+.resume-preview-section-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-2);
+}
+
+.template-preview-line {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-alt);
+  margin-bottom: 0.45rem;
+}
+
+.template-preview-line.short { width: 75%; }
+.template-preview-line.tiny { width: 45%; }
+
+.template-preview-chip-row,
+.resume-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.template-preview-chip,
+.resume-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.55rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.74rem;
+  background: var(--primary-50);
+  color: var(--primary-dark);
+  border: 1px solid var(--primary-200);
+}
+
+.resume-preview-contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.resume-preview-text,
+.resume-preview-list,
+.resume-preview-muted {
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
+.resume-preview-text {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.resume-preview-list {
+  margin-left: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.resume-preview-list.compact {
+  gap: 0.25rem;
+}
+
+.two-column {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+}
+
+.resume-modal {
+  max-width: 980px;
+}
+
+.resume-modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+  margin-top: var(--sp-4);
+}
+
+.resume-modal-grid .field {
+  margin-bottom: 0;
+}
+
+.resume-modal-grid .field .input,
+.resume-modal-grid .field textarea {
+  margin-top: var(--sp-1);
+}
+
+@media (max-width: 1100px) {
+  .resume-template-layout,
+  .resume-modal-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .two-column {
+    grid-template-columns: 1fr;
+  }
+}
+
+.template-thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 8px;
+  width: 140px;
+  text-align: center;
+}
+
+.template-preview {
+  height: 72px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, #fff 0%, var(--surface-alt) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.template-thumb.selected {
+  box-shadow: 0 6px 20px rgba(79,70,229,0.12);
+  border: 1px solid var(--primary-100);
+}
+
+.template-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* ---------- Project preview tweaks (FlowCV-like) ---------- */
+.project-preview-card {
+  border-left: 4px solid var(--border);
+  padding: 0.75rem 1rem;
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-alt) 100%);
+  border-radius: 6px;
+}
+
+.project-tags {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.project-tag {
+  background: var(--surface-alt);
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-light);
+}
+
+
 .toast-error {
   background: #991b1b;
   color: white;

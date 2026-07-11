@@ -1,16 +1,17 @@
-"""Resume generator service for the Skill2Job Placement System.
+"""Resume generator — 6 professional templates.
 
-Produces professional PDF resumes from student profile data using
-ReportLab. Validates that required profile fields are present before
-generation and provides a standardised download filename.
-
-When a student has set a dream_job, the generator uses AIResumeService
-to produce tailored content. Falls back to template-based generation
-when dream_job is absent or AI generation fails.
+Templates (3 without photo, 3 with photo placeholder):
+  classic      - Traditional blue, clean layout          (no photo)
+  modern       - Teal accent, bold dividers              (no photo)
+  minimal      - Black & white, ultra clean              (no photo)
+  sidebar      - Dark left sidebar + right content       (photo circle)
+  executive    - Dark header banner, white name          (photo circle)
+  photo_card   - Header block with photo area            (photo circle)
 """
 
 import json
 import logging
+import os
 import re
 from datetime import date
 from html import escape
@@ -19,520 +20,446 @@ from io import BytesIO
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
+from reportlab.lib.units import inch, mm
 from reportlab.platypus import (
-    SimpleDocTemplate,
-    Paragraph,
-    Spacer,
-    Table,
-    TableStyle,
-    HRFlowable,
-    KeepTogether,
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+    HRFlowable, KeepTogether,
 )
 
 from app import db
 from app.models import StudentProfile, User
 
 logger = logging.getLogger(__name__)
+W, H = A4  # 595.27 x 841.89 pt
 
+PALETTES = {
+    "classic":    {"p": "#1a237e", "a": "#3949ab", "m": "#4b5563"},
+    "modern":     {"p": "#0d9488", "a": "#0f766e", "m": "#374151"},
+    "minimal":    {"p": "#111827", "a": "#374151", "m": "#6b7280"},
+    "sidebar":    {"p": "#1e293b", "a": "#3b82f6", "m": "#64748b"},
+    "executive":  {"p": "#7c3aed", "a": "#a78bfa", "m": "#6b7280"},
+    "photo_card": {"p": "#b91c1c", "a": "#ef4444", "m": "#6b7280"},
+}
+VALID_TEMPLATES = list(PALETTES.keys())
+HAS_PHOTO = {"sidebar", "executive", "photo_card"}
+
+
+def _clean_text(value) -> str:
+  if value is None:
+    return ''
+  return str(value).strip()
+
+
+def _split_lines(value) -> list[str]:
+  if value is None:
+    return []
+  if isinstance(value, list):
+    return [str(item).strip() for item in value if str(item).strip()]
+  if not isinstance(value, str):
+    value = str(value)
+  normalized = value.replace('\r', '\n')
+  lines = []
+  for line in normalized.split('\n'):
+    stripped = line.strip().lstrip('•-').strip()
+    if stripped:
+      lines.append(stripped)
+  if not lines and ',' in value:
+    return [part.strip() for part in value.split(',') if part.strip()]
+  return lines
+
+
+def _split_commas(value) -> list[str]:
+  if value is None:
+    return []
+  if isinstance(value, list):
+    return [str(item).strip() for item in value if str(item).strip()]
+  return [part.strip() for part in str(value).split(',') if part.strip()]
+
+
+def _parse_projects(value) -> list[dict]:
+  if not value:
+    return []
+  if isinstance(value, list):
+    result = []
+    for item in value:
+      if isinstance(item, dict):
+        result.append({
+          'title': _clean_text(item.get('title')),
+          'description': _clean_text(item.get('description')),
+          'technologies': _clean_text(item.get('technologies')),
+        })
+      else:
+        text = _clean_text(item)
+        if text:
+          result.append({'title': text, 'description': '', 'technologies': ''})
+    return result
+
+  blocks = [block.strip() for block in str(value).replace('\r', '\n').split('\n\n') if block.strip()]
+  parsed = []
+  for block in blocks:
+    lines = [line.strip() for line in block.split('\n') if line.strip()]
+    if not lines:
+      continue
+    title = lines[0].lstrip('•-').strip()
+    description_lines = [line.lstrip('•-').strip() for line in lines[1:]]
+    parsed.append({
+      'title': title,
+      'description': ' '.join(description_lines),
+      'technologies': '',
+    })
+  return parsed
+
+
+def _parse_certifications(value) -> list[dict]:
+  items = _split_lines(value)
+  return [{'name': item, 'issuer': '', 'issue_date': ''} for item in items]
+
+
+def _coerce_links(value) -> dict:
+  if not value:
+    return {}
+  if isinstance(value, dict):
+    return {
+      'linkedin': _clean_text(value.get('linkedin')),
+      'github': _clean_text(value.get('github')),
+      'portfolio': _clean_text(value.get('portfolio')),
+    }
+  return {}
+
+
+def _safe_escape_lines(lines: list[str]) -> list[str]:
+  return [escape(line) for line in lines if line]
+
+
+def _truncate(text: str, limit: int = 220) -> str:
+  text = _clean_text(text)
+  if len(text) <= limit:
+    return text
+  return text[:limit - 3].rstrip() + '...'
+ 
 
 class ResumeGenerator:
-    """Generate professional PDF resumes from student profile data.
+  """Builds PDF resumes from student profiles.
 
-    Usage::
+  Supports 6 templates (see module docstring). Integrates with
+  AIResumeService when a dream_job is set on the profile.
+  """
 
-        gen = ResumeGenerator()
-        valid, missing = gen.validate_profile(profile_dict)
-        pdf_bytes = gen.generate_resume(student_id)
-        filename = gen.get_download_filename("John Doe")
+  def __init__(self):
+    self.styles = getSampleStyleSheet()
+
+  # -------------------- Validation & helpers --------------------
+  def validate_profile(self, profile: dict) -> tuple[bool, list]:
+    """Validate a profile-like dict for required resume fields.
+
+    Required: name, institution, degree, branch, skills
     """
+    missing: list[str] = []
+    # name may be in profile or provided via User
+    name = profile.get('name')
+    if not name or (isinstance(name, str) and not name.strip()):
+      missing.append('name')
 
-    # Required fields for resume generation
-    REQUIRED_FIELDS = {
-        "name": "name",
-        "institution": "institution",
-        "degree": "degree",
-        "branch": "branch",
-        "skills_json": "skills",
+    for field in ('institution', 'degree', 'branch'):
+      val = profile.get(field)
+      if val is None or (isinstance(val, str) and not val.strip()):
+        missing.append(field)
+
+    # Skills may be stored as skills_json (string) or 'skills' list
+    skills_present = False
+    if 'skills' in profile and profile.get('skills'):
+      skills_value = profile.get('skills')
+      if isinstance(skills_value, list):
+        skills_present = len(skills_value) > 0
+      elif isinstance(skills_value, str):
+        skills_present = bool(skills_value.strip())
+      else:
+        skills_present = bool(skills_value)
+    else:
+      sj = profile.get('skills_json')
+      if sj:
+        try:
+          parsed = json.loads(sj) if isinstance(sj, str) else sj
+          skills_present = isinstance(parsed, list) and len(parsed) > 0
+        except Exception:
+          skills_present = False
+
+    if not skills_present:
+      missing.append('skills')
+
+    return (len(missing) == 0, missing)
+
+  def get_download_filename(self, name: str) -> str:
+    """Return a safe filename like Resume_First_Last_YYYY-MM-DD.pdf"""
+    safe = re.sub(r"[^0-9A-Za-z _-]", "", name or "Student")
+    safe = "_".join(safe.split())
+    today = date.today().isoformat()
+    return f"Resume_{safe}_{today}.pdf"
+
+  def _build_resume_payload(self, profile_dict: dict, profile_obj, override: dict | None = None, ai_content=None) -> dict:
+    override = override or {}
+    user_name = profile_dict.get('name') or profile_dict.get('full_name') or ''
+
+    summary = _clean_text(override.get('summary') or override.get('profile_summary'))
+    if not summary and ai_content is not None:
+      summary = _clean_text(getattr(ai_content, 'professional_summary', '') or getattr(ai_content, 'career_objective', ''))
+    if not summary:
+      dream_job = _clean_text(profile_dict.get('dream_job') or getattr(profile_obj, 'dream_job', ''))
+      summary = (
+        f"Final-year student seeking opportunities in {dream_job}."
+        if dream_job else
+        "Final-year Computer Science student with a strong interest in software development."
+      )
+
+    if override.get('education_entries'):
+      education = override.get('education_entries')
+    elif override.get('education'):
+      education = []
+      for block in _split_lines(override.get('education')):
+        education.append({
+          'title': block,
+          'description': '',
+          'meta': '',
+        })
+    else:
+      education = []
+      main_school = []
+      if _clean_text(profile_dict.get('degree')):
+        main_school.append(_clean_text(profile_dict.get('degree')))
+      if _clean_text(profile_dict.get('institution')):
+        main_school.append(_clean_text(profile_dict.get('institution')))
+      if main_school:
+        education.append({
+          'title': ', '.join(main_school),
+          'description': _clean_text(profile_dict.get('branch')),
+          'meta': ' | '.join([part for part in [f"CGPA {profile_dict.get('cgpa')}" if profile_dict.get('cgpa') else '', str(profile_dict.get('graduation_year')) if profile_dict.get('graduation_year') else ''] if part]),
+        })
+
+      # Add any additional profile projects/certs as education notes only if nothing else is present
+
+    skills_source = override.get('skills') or override.get('technical_skills') or profile_dict.get('skills')
+    skills = _split_commas(skills_source)
+    if not skills and profile_dict.get('skills_json'):
+      try:
+        parsed = json.loads(profile_dict['skills_json']) if isinstance(profile_dict['skills_json'], str) else profile_dict['skills_json']
+        if isinstance(parsed, list):
+          skills = _split_commas(parsed)
+      except Exception:
+        skills = []
+
+    projects = _parse_projects(override.get('projects') or override.get('project_blocks') or getattr(profile_obj, 'projects', []))
+    if not projects and getattr(profile_obj, 'projects', None):
+      projects = [
+        {
+          'title': _clean_text(project.title),
+          'description': _clean_text(project.description),
+          'technologies': _clean_text(project.technologies),
+        }
+        for project in profile_obj.projects
+      ]
+
+    certifications = _parse_certifications(override.get('certifications') or override.get('certificates') or getattr(profile_obj, 'certifications', []))
+    if not certifications and getattr(profile_obj, 'certifications', None):
+      certifications = [
+        {
+          'name': _clean_text(cert.name),
+          'issuer': _clean_text(cert.issuer),
+          'issue_date': cert.issue_date.isoformat() if getattr(cert, 'issue_date', None) else '',
+        }
+        for cert in profile_obj.certifications
+      ]
+
+    courses = _split_lines(override.get('courses') or override.get('course_list') or profile_dict.get('courses') or profile_dict.get('course_list'))
+    languages = _split_lines(override.get('languages') or profile_dict.get('languages'))
+    links = _coerce_links(override.get('links') or profile_dict.get('links'))
+    for key in ('linkedin', 'github', 'portfolio'):
+      if not links.get(key):
+        direct_value = _clean_text(override.get(key))
+        if not direct_value:
+          direct_value = _clean_text(profile_dict.get(key))
+        if direct_value:
+          links[key] = direct_value
+
+    headline = _clean_text(override.get('headline'))
+    if not headline:
+      dream_job = _clean_text(profile_dict.get('dream_job') or getattr(profile_obj, 'dream_job', ''))
+      headline = dream_job or 'Software Developer'
+
+    return {
+      'name': user_name,
+      'email': _clean_text(profile_dict.get('email')),
+      'phone': _clean_text(profile_dict.get('phone')),
+      'headline': headline,
+      'summary': summary,
+      'education': education,
+      'skills': skills,
+      'projects': projects,
+      'certifications': certifications,
+      'courses': courses,
+      'languages': languages,
+      'links': links,
+      'profile': profile_dict,
     }
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
+  def _build_story(self, payload: dict, template_id: str) -> list:
+    story = []
+    palette = PALETTES.get(template_id, PALETTES['classic'])
+    primary = colors.HexColor(palette['p'])
+    accent = colors.HexColor(palette['a'])
+    muted = colors.HexColor(palette['m'])
 
-    def validate_profile(self, profile: dict) -> tuple[bool, list[str]]:
-        """Check whether a profile dict has all required fields.
+    styles = {
+      'name': ParagraphStyle('Name', parent=self.styles['Heading1'], fontSize=20, textColor=primary, leading=22, spaceAfter=2),
+      'headline': ParagraphStyle('Headline', parent=self.styles['Normal'], fontSize=10, textColor=accent, leading=12, spaceAfter=4),
+      'section': ParagraphStyle('Section', parent=self.styles['Heading3'], fontSize=11, textColor=primary, spaceBefore=8, spaceAfter=4),
+      'body': ParagraphStyle('Body', parent=self.styles['BodyText'], fontSize=9.2, leading=12, textColor=colors.HexColor('#1f2937')),
+      'muted': ParagraphStyle('Muted', parent=self.styles['BodyText'], fontSize=8.5, leading=11, textColor=muted),
+      'small': ParagraphStyle('Small', parent=self.styles['BodyText'], fontSize=8.2, leading=10, textColor=muted),
+    }
 
-        Args:
-            profile: A dict containing profile data. Expected keys include
-                ``name`` (from User), ``institution``, ``degree``, and
-                ``skills_json`` (a non-empty JSON array string or list).
+    story.append(Paragraph(escape(payload['name'] or 'Student Name'), styles['name']))
+    story.append(Paragraph(escape(payload['headline']), styles['headline']))
 
-        Returns:
-            A tuple ``(valid, missing_fields)`` where *valid* is ``True``
-            when all required fields are present and *missing_fields* is a
-            list of human-readable names for any absent fields.
-        """
-        missing: list[str] = []
+    contact_bits = [bit for bit in [payload.get('email'), payload.get('phone'), payload['links'].get('linkedin'), payload['links'].get('github'), payload['links'].get('portfolio')] if bit]
+    if contact_bits:
+      story.append(Paragraph(' | '.join(escape(bit) for bit in contact_bits), styles['small']))
+    story.append(Spacer(1, 8))
 
-        for field_key, display_name in self.REQUIRED_FIELDS.items():
-            value = profile.get(field_key)
+    story.append(Paragraph('Profile', styles['section']))
+    story.append(Paragraph(escape(payload['summary']), styles['body']))
 
-            if field_key == "skills_json":
-                # skills_json must be a non-empty JSON array
-                if not self._has_valid_skills(value):
-                    missing.append(display_name)
-            else:
-                if value is None or (isinstance(value, str) and not value.strip()):
-                    missing.append(display_name)
+    if payload['education']:
+      story.append(Paragraph('Education', styles['section']))
+      for item in payload['education']:
+        title = item.get('title', '')
+        desc = item.get('description', '')
+        meta = item.get('meta', '')
+        parts = [f"<b>{escape(title)}</b>"]
+        if desc:
+          parts.append(escape(desc))
+        if meta:
+          parts.append(f"<i>{escape(meta)}</i>")
+        story.append(Paragraph('<br/>'.join(parts), styles['body']))
+        story.append(Spacer(1, 2))
 
-        return (len(missing) == 0, missing)
+    if payload['skills']:
+      story.append(Paragraph('Technical Skills', styles['section']))
+      story.append(Paragraph(escape(', '.join(payload['skills'])), styles['body']))
 
-    def generate_resume(self, student_id: int) -> bytes:
-        """Generate a PDF resume for the given student.
+    if payload['projects']:
+      story.append(Paragraph('Projects', styles['section']))
+      for project in payload['projects']:
+        title = project.get('title', '')
+        desc = project.get('description', '')
+        techs = project.get('technologies', '')
+        project_lines = [f"<b>{escape(title)}</b>"]
+        if desc:
+          project_lines.append(escape(desc))
+        if techs:
+          project_lines.append(f"<font color='{palette['m']}'><i>{escape(techs)}</i></font>")
+        story.append(Paragraph('<br/>'.join(project_lines), styles['body']))
+        story.append(Spacer(1, 2))
 
-        Fetches the latest profile from the database, validates required
-        fields, and builds a professional PDF document.
+    if payload['certifications']:
+      story.append(Paragraph('Certificates', styles['section']))
+      for cert in payload['certifications']:
+        cert_bits = [cert.get('name', '')]
+        issuer = cert.get('issuer', '')
+        if issuer:
+          cert_bits.append(issuer)
+        date_text = cert.get('issue_date', '')
+        if date_text:
+          cert_bits.append(date_text)
+        story.append(Paragraph(escape(' | '.join([bit for bit in cert_bits if bit])), styles['body']))
 
-        Args:
-            student_id: The ``User.id`` of the student.
+    if payload['courses']:
+      story.append(Paragraph('Courses', styles['section']))
+      story.append(Paragraph(escape(' • '.join(payload['courses'])), styles['body']))
 
-        Returns:
-            Raw PDF bytes.
+    if payload['languages']:
+      story.append(Paragraph('Languages', styles['section']))
+      story.append(Paragraph(escape(', '.join(payload['languages'])), styles['body']))
 
-        Raises:
-            ValueError: If the student has no profile or the profile is
-                missing required fields.
-        """
-        # 1. Fetch profile and user
-        profile = StudentProfile.query.filter_by(user_id=student_id).first()
-        if profile is None:
-            raise ValueError("Student profile not found")
+    return story
 
-        user = db.session.get(User, student_id)
-        if user is None:
-            raise ValueError("User not found")
+  def _build_pdf(self, payload: dict, template_id: str) -> bytes:
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=32)
+    story = self._build_story(payload, template_id)
+    doc.build(story)
+    pdf = buf.getvalue()
+    buf.close()
+    return pdf
 
-        # 2. Build a combined dict for validation
-        profile_dict = profile.to_dict()
-        profile_dict["name"] = user.name
-        profile_dict["email"] = user.email
-        profile_dict["phone"] = user.phone
+  # -------------------- PDF builders --------------------
+  def _build_pdf_with_ai_content(self, profile_dict: dict, profile_obj, ai_content) -> bytes:
+    """Build a PDF using AI-driven content sections."""
+    payload = self._build_resume_payload(
+      profile_dict,
+      profile_obj,
+      override={
+        'summary': getattr(ai_content, 'professional_summary', '') or getattr(ai_content, 'career_objective', ''),
+        'skills': getattr(ai_content, 'prioritized_skills', []),
+        'projects': getattr(ai_content, 'project_descriptions', []),
+      },
+      ai_content=ai_content,
+    )
+    return self._build_pdf(payload, 'modern')
 
-        # 3. Validate
-        valid, missing = self.validate_profile(profile_dict)
-        if not valid:
-            raise ValueError(f"Profile is missing required fields: {', '.join(missing)}")
+  def _build_pdf_template(self, profile_dict: dict, profile_obj, template_id: str) -> bytes:
+    """Build a template-based PDF (fallback or when no AI content)."""
+    payload = self._build_resume_payload(profile_dict, profile_obj, override=profile_dict)
+    return self._build_pdf(payload, template_id)
 
-        # 4. Build PDF — use AI content when dream_job is set
-        if profile.dream_job and profile.dream_job.strip():
-            try:
-                from app.services.ai_resume_service import AIResumeService
-                ai_service = AIResumeService()
-                ai_content = ai_service.generate_ai_content(profile, user)
-                return self._build_pdf_with_ai_content(profile_dict, profile, ai_content)
-            except Exception:
-                logger.exception(
-                    "AIResumeService failed for user_id=%s; falling back to "
-                    "template-based generation",
-                    student_id,
-                )
+  # -------------------- Public API --------------------
+  def generate_resume(self, user_id: int, template_id: str = 'classic', profile_override: dict | None = None) -> bytes:
+    """Generate a PDF resume for a user id.
 
-        return self._build_pdf(profile_dict, profile)
+    - Loads profile and user
+    - Optionally applies profile_override for missing fields
+    - Validates required fields and raises ValueError with message
+      starting with "Profile is missing required fields:" when missing
+    - If `dream_job` is set and non-empty, attempts to call AIResumeService
+      to get AI content; falls back to template generation if AI fails.
+    """
+    profile = StudentProfile.query.filter_by(user_id=user_id).first()
+    if profile is None:
+      raise ValueError('Student profile not found')
 
-    def get_download_filename(self, student_name: str) -> str:
-        """Return a standardised download filename for the resume.
+    user = db.session.get(User, user_id)
 
-        Format: ``Resume_{Name}_{YYYY-MM-DD}.pdf`` with spaces replaced
-        by underscores.
+    profile_dict = profile.to_dict()
+    # attach user contact details
+    if user:
+      profile_dict['name'] = user.name
+      profile_dict['email'] = user.email
+      profile_dict['phone'] = user.phone
 
-        Args:
-            student_name: The student's full name.
+    # Apply overrides (profile_override expected as simple dict)
+    if profile_override:
+      for k, v in profile_override.items():
+        profile_dict[k] = v
 
-        Returns:
-            The formatted filename string.
-        """
-        safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", student_name.strip())
-        safe_name = re.sub(r"_+", "_", safe_name).strip("_") or "Student"
-        today = date.today().isoformat()
-        return f"Resume_{safe_name}_{today}.pdf"
+    valid, missing = self.validate_profile(profile_dict)
+    if not valid:
+      raise ValueError('Profile is missing required fields: ' + ','.join(missing))
 
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
+    # Use AIResumeService when dream_job is set and non-blank
+    dj = getattr(profile, 'dream_job', None)
+    if dj and isinstance(dj, str) and dj.strip():
+      try:
+        from app.services.ai_resume_service import AIResumeService
 
-    @staticmethod
-    def _has_valid_skills(value) -> bool:
-        """Return True if *value* represents a non-empty skills list."""
-        if value is None:
-            return False
+        ai = AIResumeService()
+        ai_content = ai.generate_ai_content(profile, user)
+        return self._build_pdf_with_ai_content(profile_dict, profile, ai_content)
+      except Exception:
+        logger.exception('AIResumeService failed — falling back to template')
+        # fallback to template below
 
-        if isinstance(value, list):
-            return len(value) > 0
+    # Template-based generation
+    if template_id not in VALID_TEMPLATES:
+      template_id = 'classic'
 
-        if isinstance(value, str):
-            value = value.strip()
-            if not value:
-                return False
-            try:
-                parsed = json.loads(value)
-                return isinstance(parsed, list) and len(parsed) > 0
-            except (json.JSONDecodeError, TypeError):
-                return False
+    return self._build_pdf_template(profile_dict, profile, template_id)
 
-        return False
-
-    def _build_pdf(self, profile_dict: dict, profile: StudentProfile) -> bytes:
-        """Construct the PDF document and return its bytes."""
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=A4,
-            topMargin=0.5 * inch,
-            bottomMargin=0.5 * inch,
-            leftMargin=0.75 * inch,
-            rightMargin=0.75 * inch,
-        )
-
-        styles = getSampleStyleSheet()
-        elements: list = []
-
-        # Custom styles
-        title_style = ParagraphStyle(
-            "ResumeTitle",
-            parent=styles["Title"],
-            fontSize=20,
-            spaceAfter=4,
-            textColor=colors.HexColor("#1a237e"),
-        )
-        section_style = ParagraphStyle(
-            "SectionHeader",
-            parent=styles["Heading2"],
-            fontSize=13,
-            textColor=colors.HexColor("#1a237e"),
-            spaceBefore=12,
-            spaceAfter=4,
-        )
-        body_style = styles["Normal"]
-        body_style.fontSize = 10
-        body_style.leading = 14
-        body_style.spaceAfter = 3
-        muted_style = ParagraphStyle(
-            "Muted",
-            parent=body_style,
-            textColor=colors.HexColor("#4b5563"),
-        )
-        bullet_style = ParagraphStyle(
-            "ResumeBullet",
-            parent=body_style,
-            leftIndent=12,
-            firstLineIndent=-8,
-            spaceAfter=3,
-        )
-
-        # --- Personal Info ---
-        elements.append(Paragraph(self._safe_text(profile_dict.get("name", "")), title_style))
-
-        contact_parts: list[str] = []
-        if profile_dict.get("email"):
-            contact_parts.append(profile_dict["email"])
-        if profile_dict.get("phone"):
-            contact_parts.append(profile_dict["phone"])
-        if contact_parts:
-            elements.append(Paragraph(self._safe_text(" | ".join(contact_parts)), muted_style))
-
-        elements.append(Spacer(1, 6))
-        elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#1a237e")))
-        elements.append(Spacer(1, 6))
-
-        # --- Career Summary ---
-        skills = self._parse_skills(profile_dict.get("skills_json"))
-        elements.append(Paragraph("Career Summary", section_style))
-        elements.append(Paragraph(self._safe_text(self._build_summary(profile_dict, skills)), body_style))
-
-        # --- Academic Details ---
-        elements.append(Paragraph("Academic Details", section_style))
-        academic_data = []
-        if profile_dict.get("institution"):
-            academic_data.append(["Institution", self._safe_text(profile_dict["institution"])])
-        if profile_dict.get("degree"):
-            academic_data.append(["Degree", self._safe_text(profile_dict["degree"])])
-        if profile_dict.get("branch"):
-            academic_data.append(["Branch", self._safe_text(profile_dict["branch"])])
-        if profile_dict.get("cgpa") is not None:
-            academic_data.append(["CGPA", str(profile_dict["cgpa"])])
-        if profile_dict.get("graduation_year") is not None:
-            academic_data.append(["Graduation Year", str(profile_dict["graduation_year"])])
-
-        if academic_data:
-            table = Table(academic_data, colWidths=[1.8 * inch, 4.5 * inch])
-            table.setStyle(TableStyle([
-                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 10),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#374151")),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ("TOPPADDING", (0, 0), (-1, -1), 2),
-            ]))
-            elements.append(table)
-
-        # --- Technical Skills ---
-        elements.append(Paragraph("Technical Skills", section_style))
-        if skills:
-            for label, grouped_skills in self._group_skills(skills).items():
-                elements.append(
-                    Paragraph(
-                        f"<b>{self._safe_text(label)}:</b> {self._safe_text(', '.join(grouped_skills))}",
-                        body_style,
-                    )
-                )
-
-        # --- Projects ---
-        projects = profile.projects if profile.projects else []
-        if projects:
-            elements.append(Paragraph("Projects", section_style))
-            for proj in projects:
-                block = []
-                proj_title = f"<b>{self._safe_text(proj.title)}</b>"
-                if proj.technologies:
-                    proj_title += f" <i>({self._safe_text(proj.technologies)})</i>"
-                block.append(Paragraph(proj_title, body_style))
-                if proj.description:
-                    for point in self._split_points(proj.description):
-                        block.append(Paragraph(f"- {self._safe_text(point)}", bullet_style))
-                block.append(Spacer(1, 4))
-                elements.append(KeepTogether(block))
-
-        # --- Certifications ---
-        certifications = profile.certifications if profile.certifications else []
-        if certifications:
-            elements.append(Paragraph("Certifications", section_style))
-            for cert in certifications:
-                cert_text = f"<b>{self._safe_text(cert.name)}</b>"
-                if cert.issuer:
-                    cert_text += f" - {self._safe_text(cert.issuer)}"
-                if cert.issue_date:
-                    cert_text += f" ({cert.issue_date.isoformat()})"
-                elements.append(Paragraph(cert_text, body_style))
-                elements.append(Spacer(1, 2))
-
-        doc.build(elements)
-        return buffer.getvalue()
-
-    def _build_pdf_with_ai_content(self, profile_dict: dict, profile: StudentProfile, ai_content) -> bytes:
-        """Build PDF using AI-generated sections.
-
-        Renders AI-generated career objective, professional summary,
-        prioritized skills, and enhanced project descriptions.
-        """
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=A4,
-            topMargin=0.5 * inch,
-            bottomMargin=0.5 * inch,
-            leftMargin=0.75 * inch,
-            rightMargin=0.75 * inch,
-        )
-
-        styles = getSampleStyleSheet()
-        elements: list = []
-
-        # Custom styles
-        title_style = ParagraphStyle(
-            "ResumeTitle",
-            parent=styles["Title"],
-            fontSize=20,
-            spaceAfter=4,
-            textColor=colors.HexColor("#1a237e"),
-        )
-        section_style = ParagraphStyle(
-            "SectionHeader",
-            parent=styles["Heading2"],
-            fontSize=13,
-            textColor=colors.HexColor("#1a237e"),
-            spaceBefore=12,
-            spaceAfter=4,
-        )
-        body_style = styles["Normal"]
-        body_style.fontSize = 10
-        body_style.leading = 14
-        body_style.spaceAfter = 3
-        muted_style = ParagraphStyle(
-            "Muted",
-            parent=body_style,
-            textColor=colors.HexColor("#4b5563"),
-        )
-        bullet_style = ParagraphStyle(
-            "ResumeBullet",
-            parent=body_style,
-            leftIndent=12,
-            firstLineIndent=-8,
-            spaceAfter=3,
-        )
-
-        # --- Personal Info ---
-        elements.append(Paragraph(self._safe_text(profile_dict.get("name", "")), title_style))
-
-        contact_parts: list[str] = []
-        if profile_dict.get("email"):
-            contact_parts.append(profile_dict["email"])
-        if profile_dict.get("phone"):
-            contact_parts.append(profile_dict["phone"])
-        if contact_parts:
-            elements.append(Paragraph(self._safe_text(" | ".join(contact_parts)), muted_style))
-
-        elements.append(Spacer(1, 6))
-        elements.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#1a237e")))
-        elements.append(Spacer(1, 6))
-
-        # --- Career Objective (AI-generated) ---
-        elements.append(Paragraph("Career Objective", section_style))
-        elements.append(Paragraph(self._safe_text(ai_content.career_objective), body_style))
-
-        # --- Professional Summary (AI-generated) ---
-        elements.append(Paragraph("Professional Summary", section_style))
-        elements.append(Paragraph(self._safe_text(ai_content.professional_summary), body_style))
-
-        # --- Academic Details ---
-        elements.append(Paragraph("Academic Details", section_style))
-        academic_data = []
-        if profile_dict.get("institution"):
-            academic_data.append(["Institution", self._safe_text(profile_dict["institution"])])
-        if profile_dict.get("degree"):
-            academic_data.append(["Degree", self._safe_text(profile_dict["degree"])])
-        if profile_dict.get("branch"):
-            academic_data.append(["Branch", self._safe_text(profile_dict["branch"])])
-        if profile_dict.get("cgpa") is not None:
-            academic_data.append(["CGPA", str(profile_dict["cgpa"])])
-        if profile_dict.get("graduation_year") is not None:
-            academic_data.append(["Graduation Year", str(profile_dict["graduation_year"])])
-
-        if academic_data:
-            table = Table(academic_data, colWidths=[1.8 * inch, 4.5 * inch])
-            table.setStyle(TableStyle([
-                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 10),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#374151")),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ("TOPPADDING", (0, 0), (-1, -1), 2),
-            ]))
-            elements.append(table)
-
-        # --- Technical Skills (AI-prioritized) ---
-        elements.append(Paragraph("Technical Skills", section_style))
-        if ai_content.skill_categories:
-            for label, grouped_skills in ai_content.skill_categories.items():
-                elements.append(
-                    Paragraph(
-                        f"<b>{self._safe_text(label)}:</b> {self._safe_text(', '.join(grouped_skills))}",
-                        body_style,
-                    )
-                )
-
-        # --- Projects (AI-enhanced descriptions) ---
-        if ai_content.project_descriptions:
-            elements.append(Paragraph("Projects", section_style))
-            for proj_desc in ai_content.project_descriptions:
-                block = []
-                proj_title = f"<b>{self._safe_text(proj_desc.get('title', ''))}</b>"
-                if proj_desc.get("technologies"):
-                    proj_title += f" <i>({self._safe_text(proj_desc['technologies'])})</i>"
-                block.append(Paragraph(proj_title, body_style))
-                if proj_desc.get("description"):
-                    for point in self._split_points(proj_desc["description"]):
-                        block.append(Paragraph(f"- {self._safe_text(point)}", bullet_style))
-                if proj_desc.get("relevance_note"):
-                    block.append(
-                        Paragraph(
-                            f"<i>{self._safe_text(proj_desc['relevance_note'])}</i>",
-                            muted_style,
-                        )
-                    )
-                block.append(Spacer(1, 4))
-                elements.append(KeepTogether(block))
-
-        # --- Certifications ---
-        certifications = profile.certifications if profile.certifications else []
-        if certifications:
-            elements.append(Paragraph("Certifications", section_style))
-            for cert in certifications:
-                cert_text = f"<b>{self._safe_text(cert.name)}</b>"
-                if cert.issuer:
-                    cert_text += f" - {self._safe_text(cert.issuer)}"
-                if cert.issue_date:
-                    cert_text += f" ({cert.issue_date.isoformat()})"
-                elements.append(Paragraph(cert_text, body_style))
-                elements.append(Spacer(1, 2))
-
-        doc.build(elements)
-        return buffer.getvalue()
-
-    @staticmethod
-    def _parse_skills(value) -> list[str]:
-        """Parse skills from a JSON string or list."""
-        if value is None:
-            return []
-        if isinstance(value, list):
-            return [str(skill).strip() for skill in value if str(skill).strip()]
-        if isinstance(value, str):
-            try:
-                parsed = json.loads(value)
-                if isinstance(parsed, list):
-                    return [str(skill).strip() for skill in parsed if str(skill).strip()]
-            except (json.JSONDecodeError, TypeError):
-                pass
-        return []
-
-    @staticmethod
-    def _safe_text(value) -> str:
-        """Escape user-controlled text before inserting it into ReportLab markup."""
-        return escape(str(value or ""), quote=True)
-
-    @staticmethod
-    def _split_points(text: str) -> list[str]:
-        """Turn project text into compact resume bullets."""
-        parts = re.split(r"(?:\r?\n|[.;]\s+)", text.strip())
-        return [part.strip(" -") for part in parts if part.strip(" -")]
-
-    @staticmethod
-    def _build_summary(profile: dict, skills: list[str]) -> str:
-        """Create a short profile summary for the generated resume."""
-        degree = profile.get("degree") or "student"
-        branch = profile.get("branch") or "engineering"
-        top_skills = ", ".join(skills[:5]) if skills else "industry-relevant technologies"
-        return (
-            f"{degree} candidate specializing in {branch} with practical exposure "
-            f"to {top_skills}. Interested in applying technical skills through "
-            "projects, internships, and campus placement opportunities."
-        )
-
-    @staticmethod
-    def _group_skills(skills: list[str]) -> dict[str, list[str]]:
-        """Group common skills into resume-friendly categories."""
-        category_keywords = {
-            "Programming": {"python", "java", "javascript", "typescript", "c", "c++", "c#", "php"},
-            "Web & Backend": {"react", "flask", "django", "node", "express", "html", "css", "api", "rest"},
-            "Database": {"sql", "mysql", "postgresql", "mongodb", "sqlite", "database"},
-            "AI & Data": {"machine learning", "ml", "ai", "nlp", "pandas", "numpy", "tensorflow", "scikit-learn"},
-            "Tools": {"git", "github", "docker", "linux", "aws", "azure", "figma"},
-        }
-        grouped: dict[str, list[str]] = {}
-        others: list[str] = []
-
-        for skill in skills:
-            normalized = skill.lower()
-            matched_label = None
-            for label, keywords in category_keywords.items():
-                if normalized in keywords or any(keyword in normalized for keyword in keywords):
-                    matched_label = label
-                    break
-            if matched_label:
-                grouped.setdefault(matched_label, []).append(skill)
-            else:
-                others.append(skill)
-
-        if others:
-            grouped["Other"] = others
-        return grouped

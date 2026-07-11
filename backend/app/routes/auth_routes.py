@@ -358,7 +358,45 @@ def setup_first_admin():
         return jsonify({"error": {"code": "VALIDATION_ERROR", "message": str(exc), "fields": {}}}), 400
 
 
-@auth_bp.route("/update-role", methods=["POST"])
+@auth_bp.route("/admin-reset-password", methods=["POST"])
+@jwt_required
+def admin_reset_password():
+    """Allow admin to reset any user's password directly.
+
+    Accepts JSON: user_id (int) OR email (str), new_password (str).
+    Requires admin role.
+    """
+    from flask import g
+    from app import db
+    from app.models import User
+    import bcrypt
+
+    if g.current_user.get("role") != "admin":
+        return jsonify({"error": {"code": "AUTHORIZATION_ERROR", "message": "Admin access required"}}), 403
+
+    json_data = request.get_json(silent=True)
+    if not json_data:
+        return jsonify({"error": {"code": "VALIDATION_ERROR", "message": "Request body must be valid JSON"}}), 400
+
+    new_password = json_data.get("new_password", "")
+    if len(new_password) < 6:
+        return jsonify({"error": {"code": "VALIDATION_ERROR", "message": "Password must be at least 6 characters"}}), 400
+
+    # Find user by id or email
+    user = None
+    if json_data.get("user_id"):
+        user = db.session.get(User, json_data["user_id"])
+    elif json_data.get("email"):
+        user = User.query.filter_by(email=json_data["email"]).first()
+
+    if user is None:
+        return jsonify({"error": {"code": "NOT_FOUND", "message": "User not found"}}), 404
+
+    user.password_hash = bcrypt.hashpw(
+        new_password.encode("utf-8"), bcrypt.gensalt()
+    ).decode("utf-8")
+    db.session.commit()
+    return jsonify({"message": f"Password updated for {user.email}", "user": user.to_dict()}), 200
 @jwt_required
 def update_user_role():
     """Update a user's role. Requires admin privileges.

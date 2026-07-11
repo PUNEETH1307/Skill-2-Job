@@ -24,6 +24,7 @@ import Placements from './pages/admin/Placements';
 import UserManagement from './pages/admin/UserManagement';
 import SkillTaxonomy from './pages/admin/SkillTaxonomy';
 import Courses from './pages/admin/Courses';
+import StudentNotifications from './pages/student/Notifications';
 
 function App() {
   return (
@@ -47,6 +48,7 @@ function App() {
           <Route path="/student/jobs/:id/gap" element={<SkillGap />} />
           <Route path="/student/resume" element={<Resume />} />
           <Route path="/student/settings" element={<Settings />} />
+          <Route path="/student/notifications" element={<StudentNotifications />} />
         </Route>
 
         {/* Placement Officer + Admin */}

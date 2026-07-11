@@ -282,6 +282,10 @@ export default function StudentDashboard() {
                   <span className="quick-action-emoji">⚙️</span>
                   <span>Settings</span>
                 </Link>
+                <Link to="/student/notifications" className="quick-action">
+                  <span className="quick-action-emoji">🔔</span>
+                  <span>Notifications</span>
+                </Link>
               </div>
             </div>
           </div>
@@ -300,12 +304,15 @@ interface SidebarProps {
 }
 
 function StudentSidebar({ active, sidebarOpen, onToggle, onLogout }: SidebarProps) {
+  const { user } = useAuth();
+
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '🏠', path: '/student/dashboard' },
     { id: 'profile', label: 'Profile', icon: '👤', path: '/student/profile' },
     { id: 'resume', label: 'Resume', icon: '📄', path: '/student/resume' },
     { id: 'skills', label: 'Skill Analysis', icon: '🧠', path: '/student/skills' },
     { id: 'jobs', label: 'Job Matches', icon: '💼', path: '/student/jobs' },
+    { id: 'notifications', label: 'Notifications', icon: '🔔', path: '/student/notifications' },
     { id: 'settings', label: 'Settings', icon: '⚙️', path: '/student/settings' },
   ];
 
@@ -328,7 +335,36 @@ function StudentSidebar({ active, sidebarOpen, onToggle, onLogout }: SidebarProp
             </Link>
           ))}
         </nav>
+
+        {/* User info + logout at bottom of sidebar */}
         <div className="sidebar-footer">
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '0.6rem',
+            padding: '0.6rem 0.75rem',
+            background: 'rgba(255,255,255,0.07)',
+            borderRadius: 'var(--radius)',
+            marginBottom: '0.6rem',
+          }}>
+            <div style={{
+              width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
+              background: 'linear-gradient(135deg,#a5b4fc,#c4b5fd)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 700, fontSize: '0.9rem', color: '#1e1b4b',
+            }}>
+              {user?.name?.charAt(0).toUpperCase() ?? '?'}
+            </div>
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{
+                fontSize: '0.82rem', fontWeight: 600, color: 'white',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+              }}>
+                {user?.name}
+              </div>
+              <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.55)' }}>
+                Student
+              </div>
+            </div>
+          </div>
           <button onClick={onLogout} className="sidebar-logout-btn">
             🚪 Logout
           </button>

@@ -21,12 +21,54 @@ notification_bp = Blueprint("notifications", __name__, url_prefix="/api/notifica
 @jwt_required
 @role_required("placement_officer")
 def list_notifications():
-    """List all sent notifications (most recent first).
-
-    Returns:
-        200: JSON list of notification records.
-    """
+    """List all sent notifications for admin/officer view (most recent first)."""
     notifications = Notification.query.order_by(Notification.sent_at.desc()).limit(100).all()
+    return jsonify([n.to_dict() for n in notifications]), 200
+
+
+@notification_bp.route("/student", methods=["GET"])
+@jwt_required
+@role_required("student")
+def list_student_notifications():
+    """List notifications visible to the authenticated student.
+
+    Returns notifications targeted at all_students, or shortlisted
+    (if student is shortlisted), or their department.
+    Most recent first, capped at 50.
+    """
+    from app.models import Shortlist, StudentProfile
+    from sqlalchemy import or_
+
+    user_id = g.current_user["user_id"]
+
+    # Get student's profile for department check
+    profile = StudentProfile.query.filter_by(user_id=user_id).first()
+    branch = profile.branch.lower() if profile and profile.branch else None
+
+    # Check if shortlisted
+    is_shortlisted = False
+    if profile:
+        is_shortlisted = Shortlist.query.filter_by(profile_id=profile.id).first() is not None
+
+    # Build query: show notifications for this student
+    query = Notification.query
+
+    conditions = [Notification.target_audience == "all_students"]
+    if is_shortlisted:
+        conditions.append(Notification.target_audience == "shortlisted")
+    if branch:
+        conditions.append(
+            (Notification.target_audience == "specific_department") &
+            (db.func.lower(Notification.target_department) == branch)
+        )
+
+    from sqlalchemy import or_ as sql_or
+    notifications = (
+        query.filter(sql_or(*conditions))
+        .order_by(Notification.sent_at.desc())
+        .limit(50)
+        .all()
+    )
     return jsonify([n.to_dict() for n in notifications]), 200
 
 

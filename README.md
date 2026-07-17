@@ -327,7 +327,7 @@ Backend runs at: **http://localhost:5000**
 
 ```bash
 cd frontend
-node_modules/.bin/vite --port 3000
+npm run dev
 ```
 
 Frontend runs at: **http://localhost:3000**

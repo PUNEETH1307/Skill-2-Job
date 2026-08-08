@@ -53,6 +53,23 @@ def _validation_error(message: str, status_code: int = 400):
     )
 
 
+def _normalize_template_id(template_id: str | None) -> str:
+    """Clamp template ids to the set supported by the resume generator."""
+    from app.services.resume_generator import VALID_TEMPLATES
+
+    if template_id in VALID_TEMPLATES:
+        return template_id
+    return "classic"
+
+
+def _generated_resume_path(upload_folder: str, user_id: int, template_id: str) -> str:
+    """Build the per-template cache path for a generated resume PDF."""
+    safe_template = secure_filename(template_id or "classic") or "classic"
+    generated_folder = os.path.join(upload_folder, 'generated_resumes')
+    os.makedirs(generated_folder, exist_ok=True)
+    return os.path.join(generated_folder, f"{user_id}_{safe_template}.pdf")
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -320,7 +337,7 @@ def generate_resume():
     user_id = g.current_user["user_id"]
 
     json_data = request.get_json(silent=True) or {}
-    template_id = json_data.get("template", "classic")
+    template_id = _normalize_template_id(json_data.get("template", "classic"))
     profile_override = json_data.get("profile_override", {})
 
     try:
@@ -333,9 +350,7 @@ def generate_resume():
         user = db.session.get(User, user_id)
         filename = generator.get_download_filename(user.name if user else "Student")
 
-        generated_folder = os.path.join(current_app.config.get('UPLOAD_FOLDER'), 'generated_resumes')
-        os.makedirs(generated_folder, exist_ok=True)
-        generated_path = os.path.join(generated_folder, f"{user_id}.pdf")
+        generated_path = _generated_resume_path(current_app.config.get('UPLOAD_FOLDER'), user_id, template_id)
         with open(generated_path, 'wb') as pdf_file:
             pdf_file.write(pdf_bytes)
 
@@ -370,19 +385,19 @@ def generate_resume():
 def download_resume():
     """Download the student's resume as PDF. Accepts ?template= query param."""
     user_id = g.current_user["user_id"]
-    template_id = request.args.get("template", "classic")
+    template_id = _normalize_template_id(request.args.get("template", "classic"))
 
     try:
-        generated_folder = os.path.join(current_app.config.get('UPLOAD_FOLDER'), 'generated_resumes')
-        generated_path = os.path.join(generated_folder, f"{user_id}.pdf")
+        upload_folder = current_app.config.get('UPLOAD_FOLDER')
+        generated_path = _generated_resume_path(upload_folder, user_id, template_id)
 
         if os.path.exists(generated_path):
             user = db.session.get(User, user_id)
             generator = ResumeGenerator()
             filename = generator.get_download_filename(user.name if user else "Student")
             return send_from_directory(
-                generated_folder,
-                f"{user_id}.pdf",
+                os.path.dirname(generated_path),
+                os.path.basename(generated_path),
                 as_attachment=True,
                 download_name=filename,
                 mimetype="application/pdf",

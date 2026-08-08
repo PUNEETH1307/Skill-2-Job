@@ -73,54 +73,57 @@ Skill2Job is a full-stack web application built as a Major Project for placement
 ## Features
 
 ### Student Interface
-| Feature | Description |
-|---|---|
-| 🔐 Auth | Register, login, forgot/reset password, JWT sessions |
-| 👤 Profile | Academic details, skills, projects, certifications |
-| 📄 Resume | Upload PDF/DOCX for NLP parsing, generate AI-enhanced PDF resume |
-| 🧠 Skill Analysis | Categorized skill breakdown with taxonomy matching |
-| 💼 Job Matches | Cosine similarity-based ranked job recommendations |
-| 📊 Skill Gap | Missing skills per job role with deficit scores |
-| 📚 Courses | Recommended courses (Coursera, Udemy, NPTEL, YouTube) per skill gap |
-| 🤖 AI Prediction | Random Forest placement success probability with contributing factors |
-| ⚙️ Settings | Change password, notification preferences |
+
+| Feature           | Description                                                           |
+| ----------------- | --------------------------------------------------------------------- |
+| 🔐 Auth           | Register, login, forgot/reset password, JWT sessions                  |
+| 👤 Profile        | Academic details, skills, projects, certifications                    |
+| 📄 Resume         | Upload PDF/DOCX for NLP parsing, generate AI-enhanced PDF resume      |
+| 🧠 Skill Analysis | Categorized skill breakdown with taxonomy matching                    |
+| 💼 Job Matches    | Cosine similarity-based ranked job recommendations                    |
+| 📊 Skill Gap      | Missing skills per job role with deficit scores                       |
+| 📚 Courses        | Recommended courses (Coursera, Udemy, NPTEL, YouTube) per skill gap   |
+| 🤖 AI Prediction  | Random Forest placement success probability with contributing factors |
+| ⚙️ Settings       | Change password, notification preferences                             |
 
 ### Placement Officer Interface
-| Feature | Description |
-|---|---|
-| 📋 Dashboard | Placement overview, active jobs, recent shortlists, top skills demand |
-| 🏢 Companies | Add and manage company records |
-| 💼 Job Roles | Create job roles with auto skill vector generation |
-| 👥 Shortlist | Rank candidates by compatibility, mark shortlisted, send email alerts |
-| 🗓️ Interviews | Schedule interviews, update status/result, auto-create placement on selection |
-| 🎓 Placements | Record confirmed placements with package details |
-| 🔔 Notifications | Broadcast announcements to all students, shortlisted, or by department |
-| 📊 Analytics | Placement stats, department/company breakdown, skill demand chart |
-| 📚 Courses | Add course recommendations per skill |
+
+| Feature          | Description                                                                   |
+| ---------------- | ----------------------------------------------------------------------------- |
+| 📋 Dashboard     | Placement overview, active jobs, recent shortlists, top skills demand         |
+| 🏢 Companies     | Add and manage company records                                                |
+| 💼 Job Roles     | Create job roles with auto skill vector generation                            |
+| 👥 Shortlist     | Rank candidates by compatibility, mark shortlisted, send email alerts         |
+| 🗓️ Interviews    | Schedule interviews, update status/result, auto-create placement on selection |
+| 🎓 Placements    | Record confirmed placements with package details                              |
+| 🔔 Notifications | Broadcast announcements to all students, shortlisted, or by department        |
+| 📊 Analytics     | Placement stats, department/company breakdown, skill demand chart             |
+| 📚 Courses       | Add course recommendations per skill                                          |
 
 ### Admin Interface
-| Feature | Description |
-|---|---|
-| 👥 User Management | Create, search, paginate users; change roles; activate/deactivate |
-| 🧠 Skill Taxonomy | CRUD skill taxonomy with categories and synonyms |
-| 📈 Placement Prediction | Train Random Forest model, batch predict all students |
-| 📊 Full Analytics | All coordinator features + system health metrics |
+
+| Feature                 | Description                                                       |
+| ----------------------- | ----------------------------------------------------------------- |
+| 👥 User Management      | Create, search, paginate users; change roles; activate/deactivate |
+| 🧠 Skill Taxonomy       | CRUD skill taxonomy with categories and synonyms                  |
+| 📈 Placement Prediction | Train Random Forest model, batch predict all students             |
+| 📊 Full Analytics       | All coordinator features + system health metrics                  |
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| **Frontend** | React 18, TypeScript, Vite, React Router v6, Recharts, Axios |
-| **Backend** | Python 3.11, Flask 3.1, SQLAlchemy, Flask-Migrate |
-| **Database** | MySQL 8.0 (PyMySQL driver) |
-| **ML / NLP** | SpaCy (`en_core_web_sm`), Scikit-learn, NumPy |
-| **Auth** | JWT (PyJWT), bcrypt |
-| **PDF** | ReportLab (generation), PyPDF2 + python-docx (parsing) |
-| **Email** | SMTP (Gmail/Outlook) with HTML templates |
-| **Testing** | Pytest, Hypothesis (property-based) |
-| **Deployment** | Docker, Gunicorn, Nginx |
+| Layer          | Technology                                                   |
+| -------------- | ------------------------------------------------------------ |
+| **Frontend**   | React 18, TypeScript, Vite, React Router v6, Recharts, Axios |
+| **Backend**    | Python 3.11, Flask 3.1, SQLAlchemy, Flask-Migrate            |
+| **Database**   | MySQL 8.0 (PyMySQL driver)                                   |
+| **ML / NLP**   | SpaCy (`en_core_web_sm`), Scikit-learn, NumPy                |
+| **Auth**       | JWT (PyJWT), bcrypt                                          |
+| **PDF**        | ReportLab (generation), PyPDF2 + python-docx (parsing)       |
+| **Email**      | SMTP (Gmail/Outlook) with HTML templates                     |
+| **Testing**    | Pytest, Hypothesis (property-based)                          |
+| **Deployment** | Docker, Gunicorn, Nginx                                      |
 
 ---
 
@@ -188,12 +191,12 @@ Skill2Job/
 
 Make sure you have the following installed:
 
-| Tool | Version | Download |
-|---|---|---|
-| Python | 3.11+ | https://python.org |
-| Node.js | 18+ | https://nodejs.org |
-| MySQL | 8.0+ | https://dev.mysql.com/downloads/ |
-| Git | Latest | https://git-scm.com |
+| Tool    | Version | Download                         |
+| ------- | ------- | -------------------------------- |
+| Python  | 3.11+   | https://python.org               |
+| Node.js | 18+     | https://nodejs.org               |
+| MySQL   | 8.0+    | https://dev.mysql.com/downloads/ |
+| Git     | Latest  | https://git-scm.com              |
 
 ---
 
@@ -301,6 +304,7 @@ cp .env.example .env
 ```
 
 The default `.env` is:
+
 ```env
 VITE_API_BASE_URL=http://localhost:5000/api
 ```
@@ -340,18 +344,20 @@ Frontend runs at: **http://localhost:3000**
 
 After running `seed.py`, the following accounts are created:
 
-| Role | Email | Password | Access |
-|---|---|---|---|
-| **Admin** | `admin@skillbridge.com` | `Admin@1234` | Full system access |
+| Role                  | Email                     | Password       | Access                |
+| --------------------- | ------------------------- | -------------- | --------------------- |
+| **Admin**             | `admin@skillbridge.com`   | `Admin@1234`   | Full system access    |
 | **Placement Officer** | `officer@skillbridge.com` | `Officer@1234` | Coordinator dashboard |
-| **Student** | `student@skillbridge.com` | `Student@1234` | Student dashboard |
+| **Student**           | `student@skillbridge.com` | `Student@1234` | Student dashboard     |
 
 > **First time setup without seed:** Register at `/register` as a student, then use the setup endpoint to create your first admin:
+>
 > ```bash
 > curl -X POST http://localhost:5000/api/auth/setup \
 >   -H "Content-Type: application/json" \
 >   -d '{"name":"Admin","email":"admin@example.com","password":"Admin@1234","role":"admin"}'
 > ```
+>
 > After that, create more staff via **Admin Panel → User Management**.
 
 ---
@@ -360,18 +366,18 @@ After running `seed.py`, the following accounts are created:
 
 All API routes are prefixed with `/api`.
 
-| Module | Base Path | Description |
-|---|---|---|
-| Auth | `/api/auth` | Register, login, logout, password reset, role update |
-| Profile | `/api/profile` | Student profile CRUD |
-| Skills | `/api/skills` | Skill analysis |
-| Jobs | `/api/jobs` | Recommendations, skill gap, courses |
-| Resume | `/api/resume` | Upload, parse, generate PDF |
-| Dashboard | `/api/dashboard` | Role-specific summaries |
-| Admin | `/api/admin` | Companies, jobs, shortlist, analytics, users, taxonomy |
-| Interviews | `/api/interviews` | Schedule and manage interviews |
-| Placements | `/api/placements` | Record confirmed placements |
-| Notifications | `/api/notifications` | Send announcements |
+| Module        | Base Path            | Description                                            |
+| ------------- | -------------------- | ------------------------------------------------------ |
+| Auth          | `/api/auth`          | Register, login, logout, password reset, role update   |
+| Profile       | `/api/profile`       | Student profile CRUD                                   |
+| Skills        | `/api/skills`        | Skill analysis                                         |
+| Jobs          | `/api/jobs`          | Recommendations, skill gap, courses                    |
+| Resume        | `/api/resume`        | Upload, parse, generate PDF                            |
+| Dashboard     | `/api/dashboard`     | Role-specific summaries                                |
+| Admin         | `/api/admin`         | Companies, jobs, shortlist, analytics, users, taxonomy |
+| Interviews    | `/api/interviews`    | Schedule and manage interviews                         |
+| Placements    | `/api/placements`    | Record confirmed placements                            |
+| Notifications | `/api/notifications` | Send announcements                                     |
 
 ---
 
@@ -395,6 +401,7 @@ Student
 ```
 
 Login redirects automatically based on role:
+
 - `student` → `/student/dashboard`
 - `placement_officer` → `/admin/dashboard` (coordinator view)
 - `admin` → `/admin/dashboard` (admin view)
@@ -405,26 +412,26 @@ Login redirects automatically based on role:
 
 ### Backend (`backend/.env`)
 
-| Variable | Required | Description |
-|---|---|---|
-| `FLASK_CONFIG` | Yes | `development` / `production` |
-| `SECRET_KEY` | Yes | Flask secret key |
-| `JWT_SECRET_KEY` | Yes | JWT signing key |
-| `JWT_TOKEN_EXPIRY_MINUTES` | No | Token TTL (default: 60) |
-| `DATABASE_URL` | Yes | MySQL connection string |
-| `SPACY_MODEL` | No | SpaCy model (default: `en_core_web_sm`) |
-| `UPLOAD_FOLDER` | No | Resume upload path (default: `uploads`) |
-| `FRONTEND_URL` | No | For email links (default: `http://localhost:3000`) |
-| `SMTP_HOST` | No | SMTP server (leave empty for dev logging) |
-| `SMTP_PORT` | No | SMTP port (default: 587) |
-| `SMTP_USER` | No | SMTP username |
-| `SMTP_PASSWORD` | No | SMTP password |
+| Variable                   | Required | Description                                        |
+| -------------------------- | -------- | -------------------------------------------------- |
+| `FLASK_CONFIG`             | Yes      | `development` / `production`                       |
+| `SECRET_KEY`               | Yes      | Flask secret key                                   |
+| `JWT_SECRET_KEY`           | Yes      | JWT signing key                                    |
+| `JWT_TOKEN_EXPIRY_MINUTES` | No       | Token TTL (default: 60)                            |
+| `DATABASE_URL`             | Yes      | MySQL connection string                            |
+| `SPACY_MODEL`              | No       | SpaCy model (default: `en_core_web_sm`)            |
+| `UPLOAD_FOLDER`            | No       | Resume upload path (default: `uploads`)            |
+| `FRONTEND_URL`             | No       | For email links (default: `http://localhost:3000`) |
+| `SMTP_HOST`                | No       | SMTP server (leave empty for dev logging)          |
+| `SMTP_PORT`                | No       | SMTP port (default: 587)                           |
+| `SMTP_USER`                | No       | SMTP username                                      |
+| `SMTP_PASSWORD`            | No       | SMTP password                                      |
 
 ### Frontend (`frontend/.env`)
 
-| Variable | Required | Description |
-|---|---|---|
-| `VITE_API_BASE_URL` | No | Backend API URL (default: `http://localhost:5000/api`) |
+| Variable            | Required | Description                                            |
+| ------------------- | -------- | ------------------------------------------------------ |
+| `VITE_API_BASE_URL` | No       | Backend API URL (default: `http://localhost:5000/api`) |
 
 ---
 
@@ -434,19 +441,19 @@ The full schema is in [`database/schema.sql`](database/schema.sql).
 
 Key tables:
 
-| Table | Description |
-|---|---|
-| `user` | All users (students, officers, admins) |
-| `student_profile` | Academic details, skills JSON, skill vector |
-| `company` | Company records |
-| `job_role` | Job positions with skill vectors |
-| `shortlist` | Shortlisted candidates per job |
-| `interview` | Interview scheduling and results |
-| `placement_record` | Confirmed placements with package |
-| `skill_taxonomy` | Canonical skills with categories and synonyms |
-| `course_recommendation` | Courses mapped to skills |
-| `notification` | Sent announcements |
-| `password_reset_token` | Temporary reset tokens |
+| Table                   | Description                                   |
+| ----------------------- | --------------------------------------------- |
+| `user`                  | All users (students, officers, admins)        |
+| `student_profile`       | Academic details, skills JSON, skill vector   |
+| `company`               | Company records                               |
+| `job_role`              | Job positions with skill vectors              |
+| `shortlist`             | Shortlisted candidates per job                |
+| `interview`             | Interview scheduling and results              |
+| `placement_record`      | Confirmed placements with package             |
+| `skill_taxonomy`        | Canonical skills with categories and synonyms |
+| `course_recommendation` | Courses mapped to skills                      |
+| `notification`          | Sent announcements                            |
+| `password_reset_token`  | Temporary reset tokens                        |
 
 ---
 

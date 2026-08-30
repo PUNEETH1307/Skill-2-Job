@@ -331,7 +331,7 @@ Backend runs at: **http://localhost:5000**
 
 ```bash
 cd frontend
-npm run dev
+npx vite
 ```
 
 Frontend runs at: **http://localhost:3000**

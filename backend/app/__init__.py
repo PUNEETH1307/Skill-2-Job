@@ -86,6 +86,9 @@ def create_app(config_name='default'):
     from app.routes.placement_routes import placement_bp
     app.register_blueprint(placement_bp)
 
+    from app.routes.stats_routes import stats_bp
+    app.register_blueprint(stats_bp)
+
     # Register input sanitization before_request hook
     from app.utils.sanitizer import register_sanitizer
     register_sanitizer(app)

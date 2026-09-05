@@ -313,6 +313,7 @@ function StudentSidebar({ active, sidebarOpen, onToggle, onLogout }: SidebarProp
     { id: 'skills', label: 'Skill Analysis', icon: '🧠', path: '/student/skills' },
     { id: 'jobs', label: 'Job Matches', icon: '💼', path: '/student/jobs' },
     { id: 'notifications', label: 'Notifications', icon: '🔔', path: '/student/notifications' },
+    { id: 'stats', label: 'Placement Stats', icon: '📊', path: '/student/stats' },
     { id: 'settings', label: 'Settings', icon: '⚙️', path: '/student/settings' },
   ];
 

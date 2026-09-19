@@ -10,6 +10,8 @@ import StudentDashboard from './pages/student/Dashboard';
 import StudentProfile from './pages/student/Profile';
 import SkillAnalysis from './pages/student/SkillAnalysis';
 import JobRecommendations from './pages/student/JobRecommendations';
+import DreamJobs from './pages/student/DreamJobs';
+import StudentDrives from './pages/student/Drives';
 import SkillGap from './pages/student/SkillGap';
 import Resume from './pages/student/Resume';
 import Settings from './pages/student/Settings';
@@ -21,6 +23,7 @@ import Analytics from './pages/admin/Analytics';
 import Interviews from './pages/admin/Interviews';
 import Notifications from './pages/admin/Notifications';
 import Placements from './pages/admin/Placements';
+import AdminDrives from './pages/admin/Drives';
 import UserManagement from './pages/admin/UserManagement';
 import SkillTaxonomy from './pages/admin/SkillTaxonomy';
 import Courses from './pages/admin/Courses';
@@ -47,6 +50,8 @@ function App() {
           <Route path="/student/profile" element={<StudentProfile />} />
           <Route path="/student/skills" element={<SkillAnalysis />} />
           <Route path="/student/jobs" element={<JobRecommendations />} />
+          <Route path="/student/dream-jobs" element={<DreamJobs />} />
+          <Route path="/student/drives" element={<StudentDrives />} />
           <Route path="/student/jobs/:id/gap" element={<SkillGap />} />
           <Route path="/student/resume" element={<Resume />} />
           <Route path="/student/settings" element={<Settings />} />
@@ -66,6 +71,7 @@ function App() {
           <Route path="/admin/interviews" element={<Interviews />} />
           <Route path="/admin/notifications" element={<Notifications />} />
           <Route path="/admin/placements" element={<Placements />} />
+          <Route path="/admin/drives" element={<AdminDrives />} />
           <Route path="/admin/stats" element={<Stats />} />
           <Route path="/admin/settings" element={<Settings />} />
         </Route>

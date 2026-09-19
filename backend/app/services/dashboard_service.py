@@ -14,7 +14,7 @@ from collections import Counter
 from sqlalchemy import func
 
 from app import db
-from app.models import StudentProfile, JobRole, Company, Shortlist, User, SkillTaxonomy, UncategorizedSkill
+from app.models import StudentProfile, JobRole, Company, Shortlist, User, SkillTaxonomy, UncategorizedSkill, PlacementRecord
 from app.services.analytics_service import AnalyticsService
 from app.services.skill_analyzer import SkillAnalyzer
 from app.services.job_matching import JobMatchingEngine
@@ -77,6 +77,15 @@ class DashboardService:
             "skill_breakdown": skill_breakdown,
             "matched_job_count": matched_job_count,
             "top_recommendations": top_recommendations,
+            "placements": [
+                {
+                    "company_name": record.company.name if record.company else None,
+                    "job_title": record.job_role.title if record.job_role else None,
+                    "package_lpa": record.package_lpa,
+                    "placement_date": record.placement_date.isoformat() if record.placement_date else None,
+                }
+                for record in PlacementRecord.query.filter_by(profile_id=profile.id).order_by(PlacementRecord.placement_date.desc()).all()
+            ],
         }
 
     # ------------------------------------------------------------------

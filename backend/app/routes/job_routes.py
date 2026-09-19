@@ -10,11 +10,12 @@ import json
 import logging
 
 import numpy as np
-from flask import Blueprint, jsonify, g
+from flask import Blueprint, jsonify, g, request
 
 from app import db
-from app.models import StudentProfile, JobRole, CourseRecommendation
+from app.models import StudentProfile, JobRole, CourseRecommendation, Company, DreamJob, SkillTaxonomy
 from app.services.job_matching import JobMatchingEngine
+from app.services.skill_analyzer import SkillAnalyzer
 from app.utils.auth_decorator import jwt_required, role_required
 
 job_bp = Blueprint("jobs", __name__, url_prefix="/api/jobs")
@@ -29,6 +30,101 @@ _recommendations_cache: dict[int, list[dict]] = {}
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
+
+@job_bp.route("/options", methods=["GET"])
+@jwt_required
+@role_required("student")
+def get_job_options():
+    """Return active companies and their active roles for Dream Job selection."""
+    companies = Company.query.order_by(Company.name.asc()).all()
+    roles = JobRole.query.filter_by(is_active=True).order_by(JobRole.title.asc()).all()
+    return jsonify({
+        "companies": [company.to_dict() for company in companies],
+        "job_roles": [
+            {
+                "id": role.id,
+                "company_id": role.company_id,
+                "company_name": role.company.name if role.company else None,
+                "title": role.title,
+                "required_skills": json.loads(role.required_skills_json) if role.required_skills_json else [],
+            }
+            for role in roles
+        ],
+    }), 200
+
+
+@job_bp.route("/dream-jobs", methods=["GET", "POST"])
+@jwt_required
+@role_required("student")
+def dream_jobs():
+    """List or save up to three company-specific Dream Jobs with AI gap analysis."""
+    profile = StudentProfile.query.filter_by(user_id=g.current_user["user_id"]).first()
+    if profile is None:
+        return jsonify({"error": {"code": "NOT_FOUND", "message": "Student profile not found", "fields": {}}}), 404
+
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        job_role_id = data.get("job_role_id")
+        if not job_role_id:
+            return jsonify({"error": {"code": "VALIDATION_ERROR", "message": "job_role_id is required", "fields": {}}}), 400
+        if DreamJob.query.filter_by(profile_id=profile.id).count() >= 3:
+            return jsonify({"error": {"code": "LIMIT_REACHED", "message": "You can save a maximum of 3 Dream Jobs.", "fields": {}}}), 400
+        job = db.session.get(JobRole, job_role_id)
+        if job is None or not job.is_active:
+            return jsonify({"error": {"code": "NOT_FOUND", "message": "Active job role not found", "fields": {}}}), 404
+        if DreamJob.query.filter_by(profile_id=profile.id, job_role_id=job.id).first():
+            return jsonify({"error": {"code": "CONFLICT", "message": "This Dream Job is already saved.", "fields": {}}}), 409
+        record = DreamJob(profile_id=profile.id, job_role_id=job.id)
+        db.session.add(record)
+        db.session.commit()
+        return jsonify(_dream_job_result(record)), 201
+
+    return jsonify([_dream_job_result(record) for record in DreamJob.query.filter_by(profile_id=profile.id).all()]), 200
+
+
+@job_bp.route("/dream-jobs/<int:id>", methods=["DELETE"])
+@jwt_required
+@role_required("student")
+def delete_dream_job(id):
+    profile = StudentProfile.query.filter_by(user_id=g.current_user["user_id"]).first()
+    record = DreamJob.query.filter_by(id=id, profile_id=profile.id if profile else None).first()
+    if record is None:
+        return jsonify({"error": {"code": "NOT_FOUND", "message": "Dream Job not found", "fields": {}}}), 404
+    db.session.delete(record)
+    db.session.commit()
+    return jsonify({"message": "Dream Job removed"}), 200
+
+
+def _dream_job_result(record):
+    """Use the shared skill analyzer to compare a target role with profile skills."""
+    result = record.to_dict()
+    profile_skills = []
+    if record.profile.skills_json:
+        try:
+            profile_skills = json.loads(record.profile.skills_json)
+        except (TypeError, ValueError):
+            profile_skills = []
+    required = result["required_skills"]
+    known = {str(skill).strip().lower() for skill in profile_skills}
+    gaps = [skill for skill in required if str(skill).strip().lower() not in known]
+    try:
+        analyzer = SkillAnalyzer()
+        matcher = JobMatchingEngine()
+        taxonomy = SkillTaxonomy.query.filter_by(is_deprecated=False).order_by(SkillTaxonomy.id).all()
+        student_vector = analyzer.generate_skill_vector(profile_skills)
+        job_vector = analyzer.generate_job_requirement_vector(required)
+        result["ai_match_score"] = round(matcher.compute_compatibility(student_vector, job_vector) * 100, 1)
+        skill_index = {skill.canonical_name.lower(): index for index, skill in enumerate(taxonomy)}
+        vector_gaps = matcher.compute_skill_gap(student_vector, job_vector, skill_index)
+        if vector_gaps:
+            gaps = [gap["skill"] for gap in vector_gaps]
+    except Exception:
+        result["ai_match_score"] = None
+    result["skill_gaps"] = [{"skill": skill, "reason": "Required by the selected role"} for skill in gaps]
+    result["recommended_skills"] = gaps[:]
+    result["analysis_status"] = "complete" if record.profile.skill_vector_json else "pending_profile_analysis"
+    return result
 
 
 @job_bp.route("/recommendations", methods=["GET"])

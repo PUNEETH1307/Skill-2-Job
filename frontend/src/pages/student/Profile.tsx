@@ -22,6 +22,7 @@ interface ProfileData {
   branch: string;
   cgpa: string;
   graduation_year: string;
+  backlogs_count: string;
   dream_job: string;
   expected_lpa: string;
   skills: string[];
@@ -54,6 +55,7 @@ export default function Profile() {
     branch: '',
     cgpa: '',
     graduation_year: '',
+    backlogs_count: '0',
     dream_job: '',
     expected_lpa: '',
     skills: [],
@@ -83,6 +85,7 @@ export default function Profile() {
           branch: d.branch ?? '',
           cgpa: d.cgpa != null ? String(d.cgpa) : '',
           graduation_year: d.graduation_year != null ? String(d.graduation_year) : '',
+          backlogs_count: d.backlogs_count != null ? String(d.backlogs_count) : '0',
           dream_job: d.dream_job ?? '',
           expected_lpa: d.expected_lpa != null ? String(d.expected_lpa) : '',
           skills: Array.isArray(d.skills_json) ? d.skills_json : (d.skills_json ? tryParseSkills(d.skills_json) : []),
@@ -183,6 +186,7 @@ export default function Profile() {
         branch: form.branch,
         cgpa: parseFloat(form.cgpa),
         graduation_year: parseInt(form.graduation_year, 10),
+        backlogs_count: parseInt(form.backlogs_count, 10) || 0,
         dream_job: form.dream_job || null,
         expected_lpa: form.expected_lpa.trim() ? parseFloat(form.expected_lpa) : null,
         skills: form.skills,
@@ -231,6 +235,7 @@ export default function Profile() {
         branch: extracted.branch || '',
         cgpa: extracted.cgpa != null ? String(extracted.cgpa) : '',
         graduation_year: extracted.graduation_year != null ? String(extracted.graduation_year) : '',
+        backlogs_count: '0',
         dream_job: '',
         expected_lpa: '',
         skills: Array.isArray(extracted.skills) ? extracted.skills : [],
@@ -462,6 +467,10 @@ export default function Profile() {
                 onChange={(e) => setForm({ ...form, graduation_year: e.target.value })}
                 className={`input${errors.graduation_year ? ' input-error' : ''}`} />
               {errors.graduation_year && <span className="field-error">{errors.graduation_year}</span>}
+              <label htmlFor="backlogs_count" className="label">Active Backlogs</label>
+              <input id="backlogs_count" type="number" min="0" step="1" value={form.backlogs_count}
+                onChange={(e) => setForm({ ...form, backlogs_count: e.target.value })}
+                className="input" />
             </div>
           </div>
         </div>

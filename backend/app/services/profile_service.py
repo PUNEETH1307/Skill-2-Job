@@ -98,6 +98,11 @@ def create_or_update_profile(user_id: int, data: dict) -> dict:
     profile.branch = data["branch"]
     profile.cgpa = cgpa
     profile.graduation_year = data.get("graduation_year")
+    if "backlogs_count" in data:
+        try:
+            profile.backlogs_count = max(0, int(data["backlogs_count"] or 0))
+        except (TypeError, ValueError):
+            raise ValueError({"backlogs_count": "Backlogs must be a whole number"})
 
     # ---- Handle dream_job (only update if key is present) ----
     if "dream_job" in data:

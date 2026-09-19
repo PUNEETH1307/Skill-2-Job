@@ -282,6 +282,9 @@ class JobMatchingEngine:
         candidates: list[dict] = []
 
         for profile in profiles:
+            # A missed registration blocks the student from the next two drives.
+            if profile.missed_drive_blocks > 0:
+                continue
             # 3. Filter by CGPA eligibility
             student_cgpa = profile.cgpa or 0.0
             if student_cgpa < threshold:

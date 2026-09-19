@@ -23,6 +23,7 @@ interface StudentDashboardData {
   skill_breakdown: Record<string, number>;
   matched_job_count: number;
   top_recommendations: JobRecommendation[];
+  placements?: Array<{ company_name: string | null; job_title: string | null; package_lpa: number | null; placement_date: string | null }>;
 }
 
 export default function StudentDashboard() {
@@ -224,6 +225,14 @@ export default function StudentDashboard() {
 
           {/* Right Column */}
           <div className="dashboard-col">
+            {data?.placements && data.placements.length > 0 && (
+              <div className="dash-widget">
+                <h3 className="dash-widget-title">✅ Placement Status</h3>
+                {data.placements.map((placement, index) => (
+                  <p key={index}><strong>Placed</strong> at {placement.company_name} as {placement.job_title}. CTC: {placement.package_lpa ? `₹${placement.package_lpa} LPA` : 'Not specified'}.</p>
+                ))}
+              </div>
+            )}
             {/* Top Job Recommendations */}
             <div className="dash-widget">
               <div className="dash-widget-header">
@@ -315,6 +324,8 @@ export function StudentSidebar({ active, sidebarOpen, onToggle, onLogout }: Side
     { id: 'resume', label: 'Resume', icon: '📄', path: '/student/resume' },
     { id: 'skills', label: 'Skill Analysis', icon: '🧠', path: '/student/skills' },
     { id: 'jobs', label: 'Job Matches', icon: '💼', path: '/student/jobs' },
+    { id: 'dream-jobs', label: 'Dream Jobs', icon: '⭐', path: '/student/dream-jobs' },
+    { id: 'drives', label: 'Placement Drives', icon: '📢', path: '/student/drives' },
     { id: 'interviews', label: 'Interviews', icon: '🗓️', path: '/student/interviews' },
     { id: 'notifications', label: 'Notifications', icon: '🔔', path: '/student/notifications' },
     { id: 'stats', label: 'Placement Stats', icon: '📊', path: '/student/stats' },

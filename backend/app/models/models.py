@@ -72,10 +72,12 @@ class StudentProfile(db.Model):
     branch = db.Column(db.String(100), nullable=True)
     cgpa = db.Column(db.Float, nullable=True)
     graduation_year = db.Column(db.Integer, nullable=True)
+    backlogs_count = db.Column(db.Integer, nullable=False, default=0)
     skills_json = db.Column(db.Text, nullable=True)
     skill_vector_json = db.Column(db.Text, nullable=True)
     dream_job = db.Column(db.String(150), nullable=True)
     expected_lpa = db.Column(db.Float, nullable=True)
+    missed_drive_blocks = db.Column(db.Integer, nullable=False, default=0)
     photo_filename = db.Column(db.String(255), nullable=True)
     updated_at = db.Column(
         db.DateTime,
@@ -91,6 +93,9 @@ class StudentProfile(db.Model):
     shortlists = db.relationship("Shortlist", back_populates="profile", cascade="all, delete-orphan")
     placement_records = db.relationship("PlacementRecord", back_populates="profile", cascade="all, delete-orphan")
     resume_uploads = db.relationship("ResumeUpload", back_populates="profile", cascade="all, delete-orphan")
+    dream_jobs = db.relationship("DreamJob", back_populates="profile", cascade="all, delete-orphan")
+    drive_registrations = db.relationship("DriveRegistration", back_populates="profile", cascade="all, delete-orphan")
+    drive_shortlists = db.relationship("DriveShortlist", back_populates="profile", cascade="all, delete-orphan")
 
     __table_args__ = (
         db.Index("idx_profile_user_id", "user_id"),
@@ -108,6 +113,7 @@ class StudentProfile(db.Model):
             "branch": self.branch,
             "cgpa": self.cgpa,
             "graduation_year": self.graduation_year,
+            "backlogs_count": self.backlogs_count,
             "skills_json": self.skills_json,
             "skill_vector_json": self.skill_vector_json,
             "dream_job": self.dream_job,
@@ -117,6 +123,8 @@ class StudentProfile(db.Model):
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "projects": [p.to_dict() for p in self.projects],
             "certifications": [c.to_dict() for c in self.certifications],
+            "missed_drive_blocks": self.missed_drive_blocks,
+            "dream_jobs": [d.to_dict() for d in self.dream_jobs],
         }
 
 
@@ -263,6 +271,179 @@ class JobRole(db.Model):
             "academic_status": self.academic_status,
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+# ---------------------------------------------------------------------------
+# DreamJob
+# ---------------------------------------------------------------------------
+
+class DreamJob(db.Model):
+    """One of a student's saved company-specific target roles."""
+
+    __tablename__ = "dream_job"
+
+    id = db.Column(db.Integer, primary_key=True)
+    profile_id = db.Column(db.Integer, db.ForeignKey("student_profile.id"), nullable=False)
+    job_role_id = db.Column(db.Integer, db.ForeignKey("job_role.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    profile = db.relationship("StudentProfile", back_populates="dream_jobs")
+    job_role = db.relationship("JobRole")
+
+    __table_args__ = (
+        db.UniqueConstraint("profile_id", "job_role_id", name="uq_dream_job_profile_role"),
+    )
+
+    def to_dict(self):
+        required_skills = []
+        if self.job_role.required_skills_json:
+            import json
+            try:
+                required_skills = json.loads(self.job_role.required_skills_json)
+            except (TypeError, ValueError):
+                pass
+        return {
+            "id": self.id,
+            "job_role_id": self.job_role_id,
+            "company_id": self.job_role.company_id,
+            "company_name": self.job_role.company.name if self.job_role.company else None,
+            "title": self.job_role.title,
+            "required_skills": required_skills,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+# ---------------------------------------------------------------------------
+# DriveRegistration
+# ---------------------------------------------------------------------------
+
+class DriveRegistration(db.Model):
+    """A student's registration outcome for a company job drive."""
+
+    __tablename__ = "drive_registration"
+
+    id = db.Column(db.Integer, primary_key=True)
+    profile_id = db.Column(db.Integer, db.ForeignKey("student_profile.id"), nullable=False)
+    job_role_id = db.Column(db.Integer, db.ForeignKey("job_role.id"), nullable=False)
+    drive_id = db.Column(db.Integer, db.ForeignKey("placement_drive.id"), nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="registered")
+    attended = db.Column(db.Boolean, nullable=False, default=False)
+    registered_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    marked_at = db.Column(db.DateTime, nullable=True)
+
+    profile = db.relationship("StudentProfile", back_populates="drive_registrations")
+    job_role = db.relationship("JobRole")
+    drive = db.relationship("PlacementDrive", back_populates="registrations")
+
+    __table_args__ = (
+        db.UniqueConstraint("profile_id", "drive_id", name="uq_drive_registration_profile_drive"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "profile_id": self.profile_id,
+            "job_role_id": self.job_role_id,
+            "drive_id": self.drive_id,
+            "company_name": self.job_role.company.name if self.job_role.company else None,
+            "job_title": self.job_role.title,
+            "status": self.status,
+            "attended": self.attended,
+            "registered_at": self.registered_at.isoformat() if self.registered_at else None,
+            "marked_at": self.marked_at.isoformat() if self.marked_at else None,
+        }
+
+
+# ---------------------------------------------------------------------------
+# PlacementDrive
+# ---------------------------------------------------------------------------
+
+class PlacementDrive(db.Model):
+    """A scheduled placement drive with eligibility and attendance rules."""
+
+    __tablename__ = "placement_drive"
+
+    id = db.Column(db.Integer, primary_key=True)
+    company_id = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=False)
+    job_role_id = db.Column(db.Integer, db.ForeignKey("job_role.id"), nullable=False)
+    title = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    job_description = db.Column(db.Text, nullable=True)
+    package_lpa = db.Column(db.Float, nullable=True)
+    location = db.Column(db.String(255), nullable=True)
+    eligibility_criteria = db.Column(db.Text, nullable=True)
+    minimum_cgpa = db.Column(db.Float, nullable=False, default=0.0)
+    allowed_graduation_years_json = db.Column(db.Text, nullable=True)
+    no_backlogs_required = db.Column(db.Boolean, nullable=False, default=False)
+    registration_deadline = db.Column(db.DateTime, nullable=True)
+    drive_date = db.Column(db.Date, nullable=False)
+    drive_time = db.Column(db.String(30), nullable=True)
+    attendance_code = db.Column(db.String(50), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="open")
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    company = db.relationship("Company")
+    job_role = db.relationship("JobRole")
+    registrations = db.relationship("DriveRegistration", back_populates="drive", cascade="all, delete-orphan")
+    shortlists = db.relationship("DriveShortlist", back_populates="drive", cascade="all, delete-orphan")
+
+    def to_dict(self):
+        import json
+        try:
+            years = json.loads(self.allowed_graduation_years_json) if self.allowed_graduation_years_json else []
+        except (TypeError, ValueError):
+            years = []
+        return {
+            "id": self.id,
+            "company_id": self.company_id,
+            "company_name": self.company.name if self.company else None,
+            "job_role_id": self.job_role_id,
+            "job_title": self.job_role.title if self.job_role else None,
+            "title": self.title,
+            "description": self.description,
+            "job_description": self.job_description,
+            "package_lpa": self.package_lpa,
+            "location": self.location,
+            "eligibility_criteria": self.eligibility_criteria,
+            "minimum_cgpa": self.minimum_cgpa,
+            "allowed_graduation_years": years,
+            "no_backlogs_required": self.no_backlogs_required,
+            "registration_deadline": self.registration_deadline.isoformat() if self.registration_deadline else None,
+            "drive_date": self.drive_date.isoformat() if self.drive_date else None,
+            "drive_time": self.drive_time,
+            "status": self.status,
+        }
+
+
+class DriveShortlist(db.Model):
+    """Officer-managed shortlist entry for one placement drive."""
+
+    __tablename__ = "drive_shortlist"
+
+    id = db.Column(db.Integer, primary_key=True)
+    drive_id = db.Column(db.Integer, db.ForeignKey("placement_drive.id"), nullable=False)
+    profile_id = db.Column(db.Integer, db.ForeignKey("student_profile.id"), nullable=False)
+    compatibility_score = db.Column(db.Float, nullable=True)
+    status = db.Column(db.String(30), nullable=False, default="shortlisted")
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    drive = db.relationship("PlacementDrive", back_populates="shortlists")
+    profile = db.relationship("StudentProfile", back_populates="drive_shortlists")
+
+    __table_args__ = (db.UniqueConstraint("drive_id", "profile_id", name="uq_drive_shortlist_profile"),)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "drive_id": self.drive_id,
+            "profile_id": self.profile_id,
+            "student_name": self.profile.user.name if self.profile and self.profile.user else None,
+            "email": self.profile.user.email if self.profile and self.profile.user else None,
+            "cgpa": self.profile.cgpa if self.profile else None,
+            "graduation_year": self.profile.graduation_year if self.profile else None,
+            "compatibility_score": self.compatibility_score,
+            "status": self.status,
         }
 
 

@@ -43,6 +43,11 @@ export default function UserManagement() {
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [passwordUser, setPasswordUser] = useState<UserRecord | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
 
   // Admin-only check
   if (currentUser?.role !== 'admin') {
@@ -139,6 +144,55 @@ export default function UserManagement() {
       await fetchUsers();
     } catch {
       setError('Failed to update user role.');
+    }
+  };
+
+  const openPasswordReset = (u: UserRecord) => {
+    setPasswordUser(u);
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordError('');
+  };
+
+  const closePasswordReset = () => {
+    if (passwordSaving) return;
+    setPasswordUser(null);
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordError('');
+  };
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError('');
+
+    if (newPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match.');
+      return;
+    }
+    if (!passwordUser) return;
+
+    setPasswordSaving(true);
+    try {
+      await api.post('/auth/admin-reset-password', {
+        user_id: passwordUser.id,
+        new_password: newPassword,
+      });
+      setPasswordUser(null);
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordError('');
+      setError('');
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { error?: { message?: string } } } })
+        ?.response?.data?.error?.message;
+      setPasswordError(message || 'Failed to change password.');
+    } finally {
+      setPasswordSaving(false);
     }
   };
 
@@ -315,12 +369,21 @@ export default function UserManagement() {
                       </span>
                     </td>
                     <td>
-                      <button
-                        onClick={() => toggleStatus(u)}
-                        className={u.status === 'active' ? 'btn btn-danger btn-sm' : 'btn btn-success btn-sm'}
-                      >
-                        {u.status === 'active' ? 'Deactivate' : 'Activate'}
-                      </button>
+                      <div className="table-actions">
+                        <button
+                          onClick={() => toggleStatus(u)}
+                          className={u.status === 'active' ? 'btn btn-danger btn-sm' : 'btn btn-success btn-sm'}
+                        >
+                          {u.status === 'active' ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openPasswordReset(u)}
+                          className="btn btn-secondary btn-sm"
+                        >
+                          Change Password
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -349,6 +412,61 @@ export default function UserManagement() {
             </button>
           </div>
         </>
+      )}
+
+      {passwordUser && (
+        <div className="modal" role="dialog" aria-modal="true" aria-labelledby="change-password-title">
+          <div className="modal-content admin-password-modal">
+            <h3 id="change-password-title">Change User Password</h3>
+            <p className="muted-text">Set a new password for this user from Admin Support.</p>
+            {passwordError && <p className="error-text">{passwordError}</p>}
+            <form onSubmit={handlePasswordReset}>
+              <label className="label-col">
+                User Email
+                <input
+                  className="input"
+                  value={passwordUser.email}
+                  readOnly
+                  aria-readonly="true"
+                />
+              </label>
+              <label className="label-col">
+                New Password
+                <input
+                  className="input"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  minLength={8}
+                  autoComplete="new-password"
+                  required
+                  disabled={passwordSaving}
+                />
+              </label>
+              <label className="label-col">
+                Confirm New Password
+                <input
+                  className="input"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  minLength={8}
+                  autoComplete="new-password"
+                  required
+                  disabled={passwordSaving}
+                />
+              </label>
+              <div className="form-actions">
+                <button type="button" className="btn btn-secondary" onClick={closePasswordReset} disabled={passwordSaving}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={passwordSaving}>
+                  {passwordSaving ? 'Saving...' : 'Set New Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

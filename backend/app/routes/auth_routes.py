@@ -397,6 +397,9 @@ def admin_reset_password():
     ).decode("utf-8")
     db.session.commit()
     return jsonify({"message": f"Password updated for {user.email}", "user": user.to_dict()}), 200
+
+
+@auth_bp.route("/update-role", methods=["POST"])
 @jwt_required
 def update_user_role():
     """Update a user's role. Requires admin privileges.

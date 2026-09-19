@@ -23,7 +23,7 @@ interface InterviewRecord {
 
 interface Company { id: number; name: string; }
 interface JobRole { id: number; title: string; company_id: number; }
-interface UserRecord { id: number; name: string; profile?: { id: number }; }
+interface StudentRecord { id: number; name: string; email: string; }
 
 const STATUS_COLORS: Record<string, string> = {
   scheduled: '#3b82f6',
@@ -44,7 +44,7 @@ export default function Interviews() {
   const [loading, setLoading] = useState(true);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
-  const [students, setStudents] = useState<UserRecord[]>([]);
+  const [students, setStudents] = useState<StudentRecord[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState<string>('all');
   const [editId, setEditId] = useState<number | null>(null);
@@ -69,12 +69,12 @@ export default function Interviews() {
         api.get('/interviews'),
         api.get('/admin/companies'),
         api.get('/admin/jobs'),
-        api.get('/admin/users', { params: { per_page: 200 } }),
+        api.get('/interviews/students'),
       ]);
       if (intRes.status === 'fulfilled') setInterviews(intRes.value.data);
       if (compRes.status === 'fulfilled') setCompanies(compRes.value.data);
       if (jobRes.status === 'fulfilled') setJobRoles(jobRes.value.data);
-      if (userRes.status === 'fulfilled') setStudents(userRes.value.data.users.filter((u: UserRecord & { role: string }) => u.role === 'student'));
+      if (userRes.status === 'fulfilled') setStudents(userRes.value.data);
     } catch {
       showToast('Failed to load data', 'error');
     } finally {

@@ -7,12 +7,38 @@ interview slots. Accessible by placement officers and admins.
 from datetime import date as date_type
 
 from flask import Blueprint, g, jsonify, request
+from sqlalchemy.orm import joinedload
 
 from app import db
 from app.models import Interview, StudentProfile, JobRole, Company, User
 from app.utils.auth_decorator import jwt_required, role_required
 
 interview_bp = Blueprint("interviews", __name__, url_prefix="/api/interviews")
+
+
+# ---------------------------------------------------------------------------
+# Student lookup for scheduling
+# ---------------------------------------------------------------------------
+
+@interview_bp.route("/students", methods=["GET"])
+@jwt_required
+@role_required("placement_officer")
+def list_interview_students():
+    """List student profiles available for interview scheduling."""
+    profiles = StudentProfile.query.options(joinedload(StudentProfile.user)).join(User).filter(
+        User.role == "student",
+        User.status == "active",
+    ).order_by(User.name).all()
+
+    return jsonify([
+        {
+            "id": profile.id,
+            "name": profile.user.name,
+            "email": profile.user.email,
+        }
+        for profile in profiles
+        if profile.user
+    ]), 200
 
 
 # ---------------------------------------------------------------------------
@@ -37,7 +63,11 @@ def list_interviews():
     profile_id = request.args.get("profile_id", type=int)
     job_role_id = request.args.get("job_role_id", type=int)
 
-    query = Interview.query
+    query = Interview.query.options(
+        joinedload(Interview.profile).joinedload(StudentProfile.user),
+        joinedload(Interview.job_role),
+        joinedload(Interview.company),
+    )
 
     if status:
         query = query.filter(Interview.status == status)
@@ -267,5 +297,8 @@ def get_my_interviews():
     if profile is None:
         return jsonify({"error": {"code": "NOT_FOUND", "message": "Student profile not found", "fields": {}}}), 404
 
-    interviews = Interview.query.filter_by(profile_id=profile.id).order_by(Interview.interview_date.desc()).all()
+    interviews = Interview.query.options(
+        joinedload(Interview.job_role),
+        joinedload(Interview.company),
+    ).filter_by(profile_id=profile.id).order_by(Interview.interview_date.desc()).all()
     return jsonify([i.to_dict() for i in interviews]), 200

@@ -76,6 +76,7 @@ class StudentProfile(db.Model):
     skill_vector_json = db.Column(db.Text, nullable=True)
     dream_job = db.Column(db.String(150), nullable=True)
     expected_lpa = db.Column(db.Float, nullable=True)
+    photo_filename = db.Column(db.String(255), nullable=True)
     updated_at = db.Column(
         db.DateTime,
         nullable=False,
@@ -111,6 +112,8 @@ class StudentProfile(db.Model):
             "skill_vector_json": self.skill_vector_json,
             "dream_job": self.dream_job,
             "expected_lpa": self.expected_lpa,
+            "photo_filename": self.photo_filename,
+            "photo_url": "/api/profile/photo" if self.photo_filename else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "projects": [p.to_dict() for p in self.projects],
             "certifications": [c.to_dict() for c in self.certifications],

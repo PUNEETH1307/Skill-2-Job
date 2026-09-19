@@ -44,6 +44,9 @@ export default function StudentDashboard() {
 
       if (dashRes.status === 'fulfilled') {
         setData(dashRes.value.data);
+      } else {
+        setData(null);
+        showToast('Unable to load your profile summary. Please refresh and try again.', 'error');
       }
 
       if (predRes.status === 'fulfilled') {
@@ -303,7 +306,7 @@ interface SidebarProps {
   onLogout: () => void;
 }
 
-function StudentSidebar({ active, sidebarOpen, onToggle, onLogout }: SidebarProps) {
+export function StudentSidebar({ active, sidebarOpen, onToggle, onLogout }: SidebarProps) {
   const { user } = useAuth();
 
   const navItems = [
@@ -312,6 +315,7 @@ function StudentSidebar({ active, sidebarOpen, onToggle, onLogout }: SidebarProp
     { id: 'resume', label: 'Resume', icon: '📄', path: '/student/resume' },
     { id: 'skills', label: 'Skill Analysis', icon: '🧠', path: '/student/skills' },
     { id: 'jobs', label: 'Job Matches', icon: '💼', path: '/student/jobs' },
+    { id: 'interviews', label: 'Interviews', icon: '🗓️', path: '/student/interviews' },
     { id: 'notifications', label: 'Notifications', icon: '🔔', path: '/student/notifications' },
     { id: 'stats', label: 'Placement Stats', icon: '📊', path: '/student/stats' },
     { id: 'settings', label: 'Settings', icon: '⚙️', path: '/student/settings' },

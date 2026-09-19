@@ -17,7 +17,8 @@ interface DeptBreakdown {
 }
 
 interface CompanyBreakdown {
-  company: string;
+  company_id: number;
+  company_name: string;
   count: number;
 }
 
@@ -50,6 +51,7 @@ export default function Analytics() {
   const [predictions, setPredictions] = useState<PredictionEntry[]>([]);
   const [predLoading, setPredLoading] = useState(false);
   const [predTrained, setPredTrained] = useState(false);
+  const [predError, setPredError] = useState('');
 
   const fetchAnalytics = useCallback(async () => {
     try {
@@ -201,8 +203,8 @@ export default function Analytics() {
                   </thead>
                   <tbody>
                     {data.company_breakdown.map((c) => (
-                      <tr key={c.company}>
-                        <td>{c.company}</td>
+                      <tr key={c.company_id}>
+                        <td>{c.company_name || 'Unknown company'}</td>
                         <td>{c.count}</td>
                       </tr>
                     ))}
@@ -247,17 +249,20 @@ export default function Analytics() {
               <button
                 onClick={async () => {
                   setPredLoading(true);
+                  setPredError('');
+                  setPredictions([]);
                   try {
-                    await api.post('/admin/predictions/train');
-                    setPredTrained(true);
+                    const trainRes = await api.post('/admin/predictions/train');
+                    setPredTrained(trainRes.data?.status === 'trained');
                     const res = await api.get('/admin/predictions/batch');
-                    setPredictions(res.data.predictions ?? []);
-                  } catch {
-                    // Try batch without training
-                    try {
-                      const res = await api.get('/admin/predictions/batch');
-                      setPredictions(res.data.predictions ?? []);
-                    } catch { /* ignore */ }
+                    const batch = Array.isArray(res.data) ? res.data : res.data?.predictions;
+                    if (!Array.isArray(batch)) {
+                      throw new Error('The prediction response did not contain a student list.');
+                    }
+                    setPredictions(batch);
+                  } catch (err) {
+                    const message = err instanceof Error ? err.message : 'Unable to calculate placement predictions.';
+                    setPredError(message);
                   } finally {
                     setPredLoading(false);
                   }
@@ -273,6 +278,8 @@ export default function Analytics() {
                 </span>
               )}
             </div>
+
+            {predError && <p className="error-text">{predError}</p>}
 
             {predictions.length > 0 && (
               <div className="table-wrapper">
@@ -310,6 +317,9 @@ export default function Analytics() {
                   </tbody>
                 </table>
               </div>
+            )}
+            {!predLoading && !predError && predTrained && predictions.length === 0 && (
+              <p className="muted-text">No student profiles are available for prediction.</p>
             )}
           </div>
         </>

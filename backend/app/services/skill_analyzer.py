@@ -175,15 +175,28 @@ class SkillAnalyzer:
     def flag_unknown_skill(self, skill_term: str) -> None:
         """Flag an unrecognized skill term for admin review.
 
-        If the term already exists in ``UncategorizedSkill``, its
-        ``occurrence_count`` is incremented.  Otherwise a new row is
-        created with ``occurrence_count=1``.
-
-        Args:
-            skill_term: The unknown skill term to flag.
+        Filters out terms that are clearly not skills (too long, sentence
+        fragments, numbers-only, etc.) to avoid polluting the review queue.
         """
         term = skill_term.strip()
         if not term:
+            return
+
+        # ── Guards: skip obvious non-skills ──────────────────────────
+        # Skip if longer than 40 chars (project description fragment)
+        if len(term) > 40:
+            return
+        # Skip if contains more than 4 words (sentence fragment)
+        if len(term.split()) > 4:
+            return
+        # Skip pure numbers
+        if term.isdigit():
+            return
+        # Skip very short tokens (single char or just symbols)
+        if len(term) <= 1:
+            return
+        # Skip tokens that look like sentences (end with period or start lowercase long phrase)
+        if term.endswith('.') and len(term) > 15:
             return
 
         existing = UncategorizedSkill.query.filter(
@@ -193,8 +206,7 @@ class SkillAnalyzer:
         if existing:
             existing.occurrence_count += 1
         else:
-            entry = UncategorizedSkill(term=term, occurrence_count=1)
-            db.session.add(entry)
+            db.session.add(UncategorizedSkill(term=term, occurrence_count=1))
 
         db.session.commit()
 

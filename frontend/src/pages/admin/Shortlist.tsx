@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
@@ -12,9 +12,17 @@ interface Candidate {
   missing_skills: string[];
 }
 
+interface JobRole {
+  id: number;
+  title: string;
+  company_name: string | null;
+}
+
 export default function Shortlist() {
   const { logout } = useAuth();
   const [selectedJobId, setSelectedJobId] = useState<string>('');
+  const [jobRoles, setJobRoles] = useState<JobRole[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(true);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -22,9 +30,23 @@ export default function Shortlist() {
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    const loadJobRoles = async () => {
+      try {
+        const res = await api.get('/admin/jobs');
+        setJobRoles(res.data);
+      } catch {
+        setError('Failed to load job roles. Please refresh and try again.');
+      } finally {
+        setJobsLoading(false);
+      }
+    };
+    loadJobRoles();
+  }, []);
+
   const fetchShortlist = async () => {
     if (!selectedJobId) {
-      setError('Please enter a Job Role ID.');
+      setError('Please select a job role.');
       return;
     }
     setError('');
@@ -113,17 +135,23 @@ export default function Shortlist() {
       <div className="form-card">
         <h2 className="form-title">Select Job Role</h2>
         <div className="flex gap-2 items-center" style={{ flexWrap: 'wrap' }}>
-          <label className="label-col">
-            Job Role ID
-            <input
+          <label className="label-col" style={{ minWidth: '280px' }}>
+            Job Role
+            <select
               value={selectedJobId}
               onChange={(e) => setSelectedJobId(e.target.value)}
               className="input"
-              type="number"
-              min="1"
-              placeholder="Enter job role ID"
-              style={{ width: '180px' }}
-            />
+              disabled={jobsLoading}
+            >
+              <option value="">
+                {jobsLoading ? 'Loading job roles...' : 'Select a job role...'}
+              </option>
+              {jobRoles.map((job) => (
+                <option key={job.id} value={job.id}>
+                  {job.title}{job.company_name ? ` — ${job.company_name}` : ''}
+                </option>
+              ))}
+            </select>
           </label>
           <button
             onClick={fetchShortlist}
@@ -187,7 +215,7 @@ export default function Shortlist() {
                     <td>{c.name}</td>
                     <td>{c.cgpa?.toFixed(2) ?? '—'}</td>
                     <td>
-                      {(c.compatibility_score * 100).toFixed(1)}%
+                      {c.compatibility_score.toFixed(1)}%
                     </td>
                     <td>
                       {c.matched_skills?.join(', ') || '—'}

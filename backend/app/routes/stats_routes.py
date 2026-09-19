@@ -33,7 +33,14 @@ def get_stats():
     year_filter = request.args.get("year", type=int)
 
     # ── 1. Overview ──────────────────────────────────────────────────
-    total_students = User.query.filter_by(role="student").count()
+    if year_filter:
+        # Keep the overview cards aligned with the year-wise chart. A
+        # selected year represents students graduating in that year.
+        total_students = StudentProfile.query.filter_by(
+            graduation_year=year_filter
+        ).count()
+    else:
+        total_students = User.query.filter_by(role="student").count()
     placed_base = db.session.query(func.count(func.distinct(PlacementRecord.profile_id)))
     if year_filter:
         placed_base = placed_base.filter(
@@ -51,9 +58,9 @@ def get_stats():
     avg_pkg = avg_pkg_q.scalar()
     max_pkg = max_pkg_q.scalar()
 
-    # ── 2. Yearly trend (2021-2025) ───────────────────────────────────
+    # ── 2. Yearly trend (2021-current year) ──────────────────────────
     yearly = []
-    for yr in [2021, 2022, 2023, 2024, 2025]:
+    for yr in range(2021, date.today().year + 1):
         cnt = db.session.query(func.count(PlacementRecord.id)).filter(
             func.year(PlacementRecord.placement_date) == yr
         ).scalar() or 0

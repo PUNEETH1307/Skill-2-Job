@@ -373,6 +373,7 @@
   bottom: 0;
   z-index: 200;
   transition: transform 0.3s ease;
+  overflow: hidden;
 }
 
 .sidebar-brand {
@@ -393,10 +394,23 @@
 
 .sidebar-nav {
   flex: 1;
+  min-height: 0;
   padding: var(--sp-4) var(--sp-3);
   display: flex;
   flex-direction: column;
   gap: var(--sp-1);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
 }
 
 .sidebar-link {
@@ -428,6 +442,7 @@
 }
 
 .sidebar-footer {
+  flex-shrink: 0;
   padding: var(--sp-4) var(--sp-3);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -876,6 +891,7 @@
   bottom: 0;
   z-index: 200;
   transition: transform 0.3s ease;
+  overflow: hidden;
 }
 
 .admin-sidebar .sidebar-brand {

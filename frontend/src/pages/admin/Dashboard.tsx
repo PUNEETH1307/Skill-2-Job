@@ -297,6 +297,7 @@ function AdminSidebar({ active, isAdmin, sidebarOpen, onToggle, onLogout }: Side
     { id: 'analytics', label: 'Analytics', icon: '📈', path: '/admin/analytics' },
     { id: 'courses', label: 'Courses', icon: '📚', path: '/admin/courses' },
     { id: 'notifications', label: 'Notifications', icon: '🔔', path: '/admin/notifications' },
+    { id: 'settings', label: 'Settings', icon: '⚙️', path: '/admin/settings' },
     ...(isAdmin ? [
       { id: 'users', label: 'User Management', icon: '👥', path: '/admin/users' },
       { id: 'skills', label: 'Skill Taxonomy', icon: '🧠', path: '/admin/skills' },

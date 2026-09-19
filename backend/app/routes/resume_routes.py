@@ -6,6 +6,7 @@ Provides endpoints for generating, uploading, and downloading student resumes.
 import logging
 import os
 import hashlib
+import base64
 from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, g, Response, current_app, request, send_from_directory
@@ -68,6 +69,19 @@ def _generated_resume_path(upload_folder: str, user_id: int, template_id: str) -
     generated_folder = os.path.join(upload_folder, 'generated_resumes')
     os.makedirs(generated_folder, exist_ok=True)
     return os.path.join(generated_folder, f"{user_id}_{safe_template}.pdf")
+
+
+def _profile_photo_base64(profile):
+    if not profile or not profile.photo_filename:
+        return None
+    photo_path = os.path.join(current_app.config.get("UPLOAD_FOLDER"), profile.photo_filename)
+    if not os.path.exists(photo_path):
+        return None
+    with open(photo_path, "rb") as photo_file:
+        encoded = base64.b64encode(photo_file.read()).decode("ascii")
+    extension = profile.photo_filename.rsplit(".", 1)[-1].lower()
+    mime = "image/jpeg" if extension in {"jpg", "jpeg"} else f"image/{extension}"
+    return f"data:{mime};base64,{encoded}"
 
 
 # ---------------------------------------------------------------------------
@@ -342,10 +356,13 @@ def generate_resume():
 
     try:
         generator = ResumeGenerator()
+        from app.models import StudentProfile
+        profile = StudentProfile.query.filter_by(user_id=user_id).first()
         pdf_bytes = generator.generate_resume(
             user_id,
             template_id=template_id,
             profile_override=profile_override,
+            photo_base64=_profile_photo_base64(profile),
         )
         user = db.session.get(User, user_id)
         filename = generator.get_download_filename(user.name if user else "Student")
@@ -404,7 +421,13 @@ def download_resume():
             )
 
         generator = ResumeGenerator()
-        pdf_bytes = generator.generate_resume(user_id, template_id=template_id)
+        from app.models import StudentProfile
+        profile = StudentProfile.query.filter_by(user_id=user_id).first()
+        pdf_bytes = generator.generate_resume(
+            user_id,
+            template_id=template_id,
+            photo_base64=_profile_photo_base64(profile),
+        )
 
         user = db.session.get(User, user_id)
         filename = generator.get_download_filename(user.name)
@@ -419,18 +442,28 @@ def download_resume():
     except ValueError as exc:
         return _validation_error(str(exc))
     except Exception as exc:
-        logger.exception(
-            "ResumeGenerator download failed for user_id=%s: %s", user_id, exc
+        logger.exception("ResumeGenerator download failed for user_id=%s: %s", user_id, exc)
+        return jsonify({"error": {"code": "PROCESSING_ERROR", "message": "Resume download failed. Please try again.", "retry": True}}), 500
+
+
+@resume_bp.route("/preview", methods=["GET"])
+@jwt_required
+@role_required("student")
+def preview_resume():
+    """Return the generated resume inline for browser preview."""
+    user_id = g.current_user["user_id"]
+    template_id = _normalize_template_id(request.args.get("template", "classic"))
+    upload_folder = current_app.config.get("UPLOAD_FOLDER")
+    generated_path = _generated_resume_path(upload_folder, user_id, template_id)
+    if not os.path.exists(generated_path):
+        generator = ResumeGenerator()
+        from app.models import StudentProfile
+        profile = StudentProfile.query.filter_by(user_id=user_id).first()
+        pdf_bytes = generator.generate_resume(
+            user_id, template_id=template_id,
+            photo_base64=_profile_photo_base64(profile),
         )
-        return (
-            jsonify(
-                {
-                    "error": {
-                        "code": "PROCESSING_ERROR",
-                        "message": "Resume download failed. Please try again.",
-                        "retry": True,
-                    }
-                }
-            ),
-            500,
-        )
+    else:
+        with open(generated_path, "rb") as pdf_file:
+            pdf_bytes = pdf_file.read()
+    return Response(pdf_bytes, content_type="application/pdf", headers={"Content-Disposition": "inline"})

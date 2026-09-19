@@ -60,6 +60,81 @@
   margin-bottom: var(--sp-8);
 }
 
+.profile-photo-card,
+.resume-photo-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 1rem;
+}
+
+.profile-photo-preview,
+.resume-photo-preview {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  background: var(--primary-50);
+  color: var(--primary);
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.profile-photo-preview img,
+.resume-photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.resume-photo-section {
+  justify-content: space-between;
+}
+
+.resume-photo-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.resume-preview-panel {
+  margin-top: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.resume-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.resume-preview-header span {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  margin-left: 0.5rem;
+}
+
+.resume-preview-frame {
+  display: block;
+  width: 100%;
+  height: 780px;
+  border: 0;
+  background: white;
+}
+
 .section-title {
   font-size: 1.2rem;
   color: var(--primary);

@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS `students` (
   `skill_vector_json` TEXT DEFAULT NULL COMMENT 'Binary vector for ML matching',
   `dream_job` VARCHAR(150) DEFAULT NULL COMMENT 'Target job role for AI resume',
   `expected_lpa` FLOAT DEFAULT NULL COMMENT 'Expected salary in Lakhs Per Annum',
+  `photo_filename` VARCHAR(255) DEFAULT NULL COMMENT 'Stored profile photo filename',
   `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
   INDEX `idx_students_user_id` (`user_id`),
   INDEX `idx_students_graduation_year` (`graduation_year`),

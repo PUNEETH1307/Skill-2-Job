@@ -11,9 +11,11 @@ import json
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
+from sqlalchemy.orm import joinedload
 
 from app import db
 from app.models import StudentProfile, JobRole, Company, User, SkillTaxonomy
+from app.services.skill_analyzer import SkillAnalyzer
 
 
 class JobMatchingEngine:
@@ -23,6 +25,9 @@ class JobMatchingEngine:
     All vector operations use scikit-learn's cosine similarity for
     consistency with the design specification.
     """
+
+    def __init__(self):
+        self.skill_analyzer = SkillAnalyzer()
 
     # ------------------------------------------------------------------
     # Public API
@@ -77,14 +82,29 @@ class JobMatchingEngine:
         """
         # 1. Get student profile
         profile = StudentProfile.query.filter_by(user_id=student_id).first()
-        if not profile or not profile.skill_vector_json:
+        if not profile:
             return []
 
-        student_vector_data = self._parse_vector_json(profile.skill_vector_json)
-        if student_vector_data is None:
-            return []
+        # Rebuild from the current taxonomy when raw skills are available so
+        # saved vectors from an older taxonomy cannot break recommendations.
+        skills = []
+        if profile.skills_json:
+            try:
+                parsed_skills = json.loads(profile.skills_json)
+                if isinstance(parsed_skills, list):
+                    skills = [str(skill).strip() for skill in parsed_skills if str(skill).strip()]
+            except (json.JSONDecodeError, TypeError):
+                skills = []
 
-        student_vector = np.array(student_vector_data["vector"], dtype=float)
+        if skills:
+            student_vector = self.skill_analyzer.generate_skill_vector(skills)
+        else:
+            if not profile.skill_vector_json:
+                return []
+            student_vector_data = self._parse_vector_json(profile.skill_vector_json)
+            if student_vector_data is None:
+                return []
+            student_vector = np.array(student_vector_data["vector"], dtype=float)
         student_cgpa = profile.cgpa or 0.0
 
         # 2. Get all active job roles
@@ -109,11 +129,24 @@ class JobMatchingEngine:
             if not job.job_vector_json:
                 continue
 
-            job_vector_data = self._parse_vector_json(job.job_vector_json)
-            if job_vector_data is None:
-                continue
+            # Rebuild from the current taxonomy so vectors saved before a
+            # taxonomy change cannot cause a dimension mismatch.
+            required_skills = []
+            if job.required_skills_json:
+                try:
+                    required_skills = json.loads(job.required_skills_json)
+                except (json.JSONDecodeError, TypeError):
+                    required_skills = []
 
-            job_vector = np.array(job_vector_data["vector"], dtype=float)
+            if required_skills:
+                job_vector = self.skill_analyzer.generate_job_requirement_vector(
+                    required_skills
+                )
+            else:
+                job_vector_data = self._parse_vector_json(job.job_vector_json)
+                if job_vector_data is None:
+                    continue
+                job_vector = np.array(job_vector_data["vector"], dtype=float)
 
             # 4. Compute compatibility score
             score = self.compute_compatibility(student_vector, job_vector)
@@ -123,13 +156,6 @@ class JobMatchingEngine:
             company_name = company.name if company else "Unknown"
 
             # Parse required skills
-            required_skills = []
-            if job.required_skills_json:
-                try:
-                    required_skills = json.loads(job.required_skills_json)
-                except (json.JSONDecodeError, TypeError):
-                    required_skills = []
-
             results.append({
                 "job_role_id": job.id,
                 "title": job.title,
@@ -208,16 +234,8 @@ class JobMatchingEngine:
         """
         # 1. Get job role
         job = db.session.get(JobRole, job_role_id)
-        if not job or not job.job_vector_json:
+        if not job:
             return []
-
-        job_vector_data = self._parse_vector_json(job.job_vector_json)
-        if job_vector_data is None:
-            return []
-
-        job_vector = np.array(job_vector_data["vector"], dtype=float)
-        job_skill_index = job_vector_data.get("skill_index", {})
-        threshold = job.cgpa_threshold or 0.0
 
         # Parse required skills for the job
         required_skills_list: list[str] = []
@@ -227,15 +245,39 @@ class JobMatchingEngine:
             except (json.JSONDecodeError, TypeError):
                 required_skills_list = []
 
+        taxonomy = (
+            SkillTaxonomy.query
+            .filter_by(is_deprecated=False)
+            .order_by(SkillTaxonomy.id)
+            .all()
+        )
+        skill_lookup = self._build_skill_lookup(taxonomy)
+
+        # Rebuild from current taxonomy when raw requirements are available.
+        # This also supports job records created before vectors were stored.
+        if required_skills_list:
+            job_vector = self._vector_from_skills(required_skills_list, skill_lookup, len(taxonomy))
+            job_skill_index = {
+                skill.canonical_name.lower(): index
+                for index, skill in enumerate(taxonomy)
+            }
+        else:
+            job_vector_data = self._parse_vector_json(job.job_vector_json)
+            if job_vector_data is None:
+                return []
+            job_vector = np.array(job_vector_data["vector"], dtype=float)
+            job_skill_index = job_vector_data.get("skill_index", {})
+
+        threshold = job.cgpa_threshold or 0.0
+        job_norm = float(np.linalg.norm(job_vector))
+
         # Build a set of required skill names (lowercase) for matching
         required_skills_lower = {s.lower() for s in required_skills_list}
 
         # 2. Get all student profiles with skill vectors
-        profiles = (
-            StudentProfile.query
-            .filter(StudentProfile.skill_vector_json.isnot(None))
-            .all()
-        )
+        profiles = StudentProfile.query.options(
+            joinedload(StudentProfile.user)
+        ).all()
 
         candidates: list[dict] = []
 
@@ -245,15 +287,43 @@ class JobMatchingEngine:
             if student_cgpa < threshold:
                 continue
 
-            student_vector_data = self._parse_vector_json(profile.skill_vector_json)
-            if student_vector_data is None:
-                continue
+            student_skills: list[str] = []
+            if profile.skills_json:
+                try:
+                    parsed_skills = json.loads(profile.skills_json)
+                    if isinstance(parsed_skills, list):
+                        student_skills = [
+                            str(skill).strip()
+                            for skill in parsed_skills
+                            if str(skill).strip()
+                        ]
+                except (json.JSONDecodeError, TypeError):
+                    student_skills = []
 
-            student_vector = np.array(student_vector_data["vector"], dtype=float)
-            student_skill_index = student_vector_data.get("skill_index", {})
+            if student_skills:
+                student_vector = self._vector_from_skills(
+                    student_skills, skill_lookup, len(taxonomy)
+                )
+                student_skill_index = {
+                    skill.canonical_name.lower(): index
+                    for index, skill in enumerate(taxonomy)
+                }
+            else:
+                student_vector_data = self._parse_vector_json(profile.skill_vector_json)
+                if student_vector_data is None:
+                    student_vector = np.zeros(len(job_vector), dtype=float)
+                    student_skill_index = {}
+                else:
+                    student_vector = np.array(student_vector_data["vector"], dtype=float)
+                    student_skill_index = student_vector_data.get("skill_index", {})
 
             # 4. Compute compatibility score
-            score = self.compute_compatibility(student_vector, job_vector)
+            student_norm = float(np.linalg.norm(student_vector))
+            dot_product = float(np.dot(student_vector, job_vector))
+            score = (
+                dot_product / (student_norm * job_norm)
+                if student_norm and job_norm else 0.0
+            )
 
             # Determine matched and missing skills
             # Build set of student skills (those with vector value > 0)
@@ -266,8 +336,7 @@ class JobMatchingEngine:
             missing = [s for s in required_skills_list if s.lower() not in student_skills_lower]
 
             # Get student name from User
-            user = db.session.get(User, profile.user_id)
-            name = user.name if user else "Unknown"
+            name = profile.user.name if profile.user else "Unknown"
 
             candidates.append({
                 "profile_id": profile.id,
@@ -286,6 +355,35 @@ class JobMatchingEngine:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _build_skill_lookup(self, taxonomy: list[SkillTaxonomy]) -> dict[str, tuple[str, int]]:
+        """Build one canonical-name and synonym lookup for a shortlist run."""
+        lookup: dict[str, tuple[str, int]] = {}
+        for index, skill in enumerate(taxonomy):
+            canonical = skill.canonical_name.lower()
+            lookup[canonical] = (canonical, index)
+            if skill.synonyms_json:
+                try:
+                    synonyms = json.loads(skill.synonyms_json)
+                except (json.JSONDecodeError, TypeError):
+                    synonyms = []
+                for synonym in synonyms:
+                    lookup[str(synonym).strip().lower()] = (canonical, index)
+        return lookup
+
+    def _vector_from_skills(
+        self,
+        skills: list[str],
+        skill_lookup: dict[str, tuple[str, int]],
+        vector_size: int,
+    ) -> np.ndarray:
+        """Build a binary vector without querying the database per skill."""
+        vector = np.zeros(vector_size, dtype=float)
+        for skill in skills:
+            match = skill_lookup.get(str(skill).strip().lower())
+            if match:
+                vector[match[1]] = 1.0
+        return vector
 
     def _parse_vector_json(self, vector_json: str) -> dict | None:
         """Parse a skill_vector_json or job_vector_json string.

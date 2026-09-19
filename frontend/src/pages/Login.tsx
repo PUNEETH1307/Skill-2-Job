@@ -1,6 +1,6 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, LoginRoleMismatchError } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
 import { AxiosError } from 'axios';
 
@@ -9,6 +9,15 @@ export default function Login() {
   const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const roleOptions = [
+    { value: 'student', label: 'Student' },
+    { value: 'placement_officer', label: 'Placement Officer' },
+    { value: 'admin', label: 'Admin' },
+  ] as const;
+  const requestedRole = new URLSearchParams(location.search).get('role');
+  const selectedRole = roleOptions.find((option) => option.value === requestedRole)?.value ?? 'student';
+  const selectedRoleLabel = roleOptions.find((option) => option.value === selectedRole)?.label ?? 'Student';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -52,7 +61,7 @@ export default function Login() {
 
     setLoading(true);
     try {
-      const authUser = await login(email, password);
+      const authUser = await login(email, password, selectedRole);
       showToast(`Welcome back, ${authUser.name}!`, 'success');
 
       const target =
@@ -61,6 +70,13 @@ export default function Login() {
           : '/student/dashboard';
       navigate(target, { replace: true });
     } catch (err) {
+      if (err instanceof LoginRoleMismatchError) {
+        const actualRoleLabel = roleOptions.find((option) => option.value === err.actualRole)?.label ?? 'another role';
+        setError(`This account is registered as ${actualRoleLabel}. Please use ${actualRoleLabel} login.`);
+        showToast(`Please use ${actualRoleLabel} login`, 'error');
+        return;
+      }
+
       if (err instanceof AxiosError && err.response) {
         setError('Invalid email or password.');
         showToast('Invalid credentials', 'error');
@@ -77,7 +93,20 @@ export default function Login() {
     <div className="auth-container">
       <div className="auth-card">
         <h1 className="auth-brand">Skill2Job</h1>
-        <h2 className="auth-subtitle">Sign In</h2>
+        <h2 className="auth-subtitle">Sign In as {selectedRoleLabel}</h2>
+
+        <div className="auth-role-switcher" aria-label="Choose account type">
+          {roleOptions.map((option) => (
+            <Link
+              key={option.value}
+              to={`/login?role=${option.value}`}
+              className={`auth-role-option${selectedRole === option.value ? ' active' : ''}`}
+              aria-current={selectedRole === option.value ? 'page' : undefined}
+            >
+              {option.label}
+            </Link>
+          ))}
+        </div>
 
         {successMessage && (
           <div className="auth-success-banner">{successMessage}</div>
@@ -115,7 +144,7 @@ export default function Login() {
           </div>
 
           <button type="submit" disabled={loading} className="auth-button">
-            {loading ? 'Signing in…' : 'Sign In'}
+            {loading ? 'Signing in…' : `Sign In as ${selectedRoleLabel}`}
           </button>
         </form>
 

@@ -69,6 +69,8 @@ export default function Profile() {
   const [successMsg, setSuccessMsg] = useState('');
   const [fetchError, setFetchError] = useState('');
   const [hasExistingProfile, setHasExistingProfile] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [photoUploading, setPhotoUploading] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -102,7 +104,29 @@ export default function Profile() {
     };
 
     fetchProfile();
+    api.get('/profile/photo', { responseType: 'blob' }).then(res => {
+      setPhotoUrl(URL.createObjectURL(res.data));
+    }).catch(() => { });
   }, []);
+
+  const handlePhotoUpload = async (file: File | undefined) => {
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setErrors({ general: 'Only JPG, PNG, and WEBP photos are allowed.' });
+      return;
+    }
+    setPhotoUploading(true);
+    try {
+      const data = new FormData(); data.append('photo', file);
+      await api.post('/profile/photo', data, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const res = await api.get('/profile/photo', { responseType: 'blob' });
+      if (photoUrl) URL.revokeObjectURL(photoUrl);
+      setPhotoUrl(URL.createObjectURL(res.data));
+      showToast('Profile photo updated!', 'success');
+    } catch {
+      setErrors({ general: 'Failed to upload profile photo.' });
+    } finally { setPhotoUploading(false); }
+  };
 
   const tryParseSkills = (raw: string): string[] => {
     try {
@@ -375,6 +399,21 @@ export default function Profile() {
       <div className="page-header">
         <h1 className="page-title">My Profile</h1>
         <Link to="/student/dashboard" className="back-link">Back to Dashboard</Link>
+      </div>
+
+      <div className="profile-photo-card">
+        <div className="profile-photo-preview">
+          {photoUrl ? <img src={photoUrl} alt="Your profile" /> : <span>{form.degree?.charAt(0) || '?'}</span>}
+        </div>
+        <div>
+          <h2 className="section-title">Profile Photo</h2>
+          <p className="muted-text">Used in photo resume templates. JPG, PNG, or WEBP.</p>
+          <label className="btn btn-secondary">
+            {photoUploading ? 'Uploading...' : 'Upload / Replace Photo'}
+            <input type="file" hidden accept="image/jpeg,image/png,image/webp" disabled={photoUploading}
+              onChange={(e) => { handlePhotoUpload(e.target.files?.[0]); e.currentTarget.value = ''; }} />
+          </label>
+        </div>
       </div>
 
       {successMsg && <div className="alert alert-success">{successMsg}</div>}

@@ -16,6 +16,16 @@ export interface AuthUser {
   role: 'student' | 'placement_officer' | 'admin';
 }
 
+export class LoginRoleMismatchError extends Error {
+  actualRole: AuthUser['role'];
+
+  constructor(actualRole: AuthUser['role']) {
+    super('The account role does not match the selected login role.');
+    this.name = 'LoginRoleMismatchError';
+    this.actualRole = actualRole;
+  }
+}
+
 interface JwtPayload {
   user_id: number;
   role: string;
@@ -27,7 +37,7 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;          // ← NEW: true while restoring session
-  login: (email: string, password: string) => Promise<AuthUser>;
+  login: (email: string, password: string, expectedRole?: AuthUser['role']) => Promise<AuthUser>;
   logout: () => void;
   register: (name: string, email: string, phone: string, password: string) => Promise<void>;
 }
@@ -76,7 +86,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false); // ← always mark done
   }, []);
 
-  const login = useCallback(async (email: string, password: string): Promise<AuthUser> => {
+  const login = useCallback(async (
+    email: string,
+    password: string,
+    expectedRole?: AuthUser['role'],
+  ): Promise<AuthUser> => {
     const response = await api.post('/auth/login', { email, password });
     const { token: newToken, user: userData } = response.data;
 
@@ -86,6 +100,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: userData.email,
       role: userData.role,
     };
+
+    if (expectedRole && authUser.role !== expectedRole) {
+      throw new LoginRoleMismatchError(authUser.role);
+    }
 
     localStorage.setItem('token', newToken);
     localStorage.setItem('user', JSON.stringify(authUser));

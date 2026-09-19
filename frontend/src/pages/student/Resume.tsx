@@ -59,7 +59,7 @@ const REQUIRED = [
 export default function Resume() {
   const { showToast } = useToast();
   const [selectedTemplate, setSelectedTemplate] = useState('classic');
-  const [step, setStep] = useState<'pick' | 'check' | 'fill' | 'done'>('pick');
+  const [step, setStep] = useState<'pick' | 'check' | 'fill' | 'edit' | 'done'>('pick');
   const [profile, setProfile] = useState<ProfileData>({});
   const [missingFields, setMissingFields] = useState<string[]>([]);
   const [fillData, setFillData] = useState<Record<string, string>>({});
@@ -69,10 +69,16 @@ export default function Resume() {
   const [uploads, setUploads] = useState<ResumeUploadEntry[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState('');
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [photoUploading, setPhotoUploading] = useState(false);
 
   useEffect(() => {
     api.get('/resume/uploads').then(r => setUploads(r.data.uploads ?? [])).catch(() => { });
     api.get('/profile').then(r => setProfile(r.data)).catch(() => { });
+    api.get('/profile/photo', { responseType: 'blob' }).then(r => {
+      setPhotoUrl(URL.createObjectURL(r.data));
+    }).catch(() => { });
   }, []);
 
   // Check profile completeness when user clicks Generate
@@ -83,7 +89,7 @@ export default function Resume() {
     if (!profile.branch) missing.push('branch');
     const skills = profile.skills_json;
     const hasSkills = skills && (
-      (typeof skills === 'string' && JSON.parse(skills || '[]').length > 0) ||
+      (typeof skills === 'string' && safeParseSkills(skills).length > 0) ||
       (Array.isArray(skills) && skills.length > 0)
     );
     if (!hasSkills) missing.push('skills_json');
@@ -107,11 +113,59 @@ export default function Resume() {
     }
     try {
       await api.post('/resume/generate', { template: selectedTemplate, profile_override: po });
+      const preview = await api.get(`/resume/preview?template=${selectedTemplate}`, { responseType: 'blob' });
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(URL.createObjectURL(preview.data));
       showToast('Resume generated!', 'success');
     } catch (err) {
       const msg = err instanceof AxiosError ? err.response?.data?.error?.message ?? 'Failed' : 'Connection error';
       setError(msg); setStep('pick');
     } finally { setGenerating(false); }
+  };
+
+  const safeParseSkills = (raw: string): string[] => {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const getEditableData = (): Record<string, string> => ({
+    institution: profile.institution ?? '',
+    degree: profile.degree ?? '',
+    branch: profile.branch ?? '',
+    cgpa: profile.cgpa != null ? String(profile.cgpa) : '',
+    graduation_year: profile.graduation_year != null ? String(profile.graduation_year) : '',
+    skills_json: Array.isArray(profile.skills_json)
+      ? profile.skills_json.join(', ')
+      : safeParseSkills(profile.skills_json ?? '').join(', '),
+  });
+
+  const handleEditResume = () => {
+    setFillData(getEditableData());
+    setStep('edit');
+  };
+
+  const handlePhotoUpload = async (file: File | undefined) => {
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setError('Please choose a JPG, PNG, or WEBP photo.');
+      return;
+    }
+    setPhotoUploading(true); setError('');
+    try {
+      const fd = new FormData(); fd.append('photo', file);
+      await api.post('/profile/photo', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const response = await api.get('/profile/photo', { responseType: 'blob' });
+      if (photoUrl) URL.revokeObjectURL(photoUrl);
+      setPhotoUrl(URL.createObjectURL(response.data));
+      showToast('Profile photo updated!', 'success');
+    } catch (err) {
+      const message = err instanceof AxiosError ? err.response?.data?.error?.message : undefined;
+      setError(message ?? 'Photo upload failed.');
+    } finally { setPhotoUploading(false); }
   };
 
   const handleFillSubmit = (e: FormEvent) => {
@@ -212,11 +266,24 @@ export default function Resume() {
               {generating ? 'Generating...' : '⚡ Generate Resume'}
             </button>
             {step === 'done' && (
-              <button onClick={handleDownload} disabled={downloading} className="btn btn-success">
-                {downloading ? 'Downloading...' : '⬇ Download PDF'}
-              </button>
+              <>
+                <button onClick={handleEditResume} className="btn btn-secondary">✏️ Edit Content</button>
+                <button onClick={handleDownload} disabled={downloading} className="btn btn-success">
+                  {downloading ? 'Downloading...' : '⬇ Download PDF'}
+                </button>
+              </>
             )}
           </div>
+
+          {step === 'done' && previewUrl && (
+            <div className="resume-preview-panel">
+              <div className="resume-preview-header">
+                <div><strong>Resume Preview</strong><span> ATS-readable PDF preview</span></div>
+                <button type="button" className="btn btn-sm btn-secondary" onClick={handleEditResume}>Edit and regenerate</button>
+              </div>
+              <iframe className="resume-preview-frame" src={previewUrl} title="Generated resume preview" />
+            </div>
+          )}
 
           {profile.dream_job && (
             <p className="alert alert-success" style={{ marginTop: '1rem' }}>
@@ -291,7 +358,7 @@ export default function Resume() {
       )}
 
       {/* ── STEP 3: Fill Missing Fields Form Modal ─────────────── */}
-      {step === 'fill' && (
+      {(step === 'fill' || step === 'edit') && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
@@ -304,11 +371,12 @@ export default function Resume() {
             animation: 'fadeIn 0.2s ease',
           }}>
             <h2 style={{ marginBottom: '0.25rem', color: 'var(--text-primary)' }}>
-              ✏️ Complete Your Profile
+              {step === 'edit' ? '✏️ Edit Resume Content' : '✏️ Complete Your Profile'}
             </h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-              Fill in the missing fields below. These will be used only for this resume.
-              To save permanently, update your <Link to="/student/profile" style={{ color: 'var(--primary)' }}>profile page</Link>.
+              {step === 'edit'
+                ? 'Edit the content for this resume, then regenerate the selected template.'
+                : <>Fill in the missing fields below. These will be used only for this resume. To save permanently, update your <Link to="/student/profile" style={{ color: 'var(--primary)' }}>profile page</Link>.</>}
             </p>
             <form onSubmit={handleFillSubmit}>
               {missingFields.map(fk => {
@@ -338,14 +406,31 @@ export default function Resume() {
                 <button type="submit" disabled={generating} className="btn btn-primary" style={{ flex: 1 }}>
                   {generating ? 'Generating...' : '⚡ Generate Now'}
                 </button>
-                <button type="button" onClick={() => setStep('check')} className="btn btn-secondary">
-                  Back
+                <button type="button" onClick={() => setStep(step === 'edit' ? 'done' : 'check')} className="btn btn-secondary">
+                  Cancel
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      <div className="page-section resume-photo-section">
+        <div>
+          <h2 className="section-title">📷 Profile Photo</h2>
+          <p className="muted-text">Upload or replace the photo used by photo templates.</p>
+        </div>
+        <div className="resume-photo-controls">
+          <div className="resume-photo-preview">
+            {photoUrl ? <img src={photoUrl} alt="Profile" /> : <span>{profile.name?.charAt(0) ?? '?'}</span>}
+          </div>
+          <label className="btn btn-secondary">
+            {photoUploading ? 'Uploading...' : 'Choose Photo'}
+            <input type="file" accept="image/jpeg,image/png,image/webp" hidden disabled={photoUploading}
+              onChange={(e) => { handlePhotoUpload(e.target.files?.[0]); e.currentTarget.value = ''; }} />
+          </label>
+        </div>
+      </div>
 
       {/* ── Upload Section ─────────────────────────────────────── */}
       <div className="page-section">

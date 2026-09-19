@@ -25,6 +25,7 @@ import UserManagement from './pages/admin/UserManagement';
 import SkillTaxonomy from './pages/admin/SkillTaxonomy';
 import Courses from './pages/admin/Courses';
 import StudentNotifications from './pages/student/Notifications';
+import StudentInterviews from './pages/student/Interviews';
 import Stats from './pages/Stats';
 
 function App() {
@@ -50,6 +51,7 @@ function App() {
           <Route path="/student/resume" element={<Resume />} />
           <Route path="/student/settings" element={<Settings />} />
           <Route path="/student/notifications" element={<StudentNotifications />} />
+          <Route path="/student/interviews" element={<StudentInterviews />} />
           <Route path="/student/stats" element={<Stats />} />
         </Route>
 
@@ -65,6 +67,7 @@ function App() {
           <Route path="/admin/notifications" element={<Notifications />} />
           <Route path="/admin/placements" element={<Placements />} />
           <Route path="/admin/stats" element={<Stats />} />
+          <Route path="/admin/settings" element={<Settings />} />
         </Route>
 
         {/* Admin only */}

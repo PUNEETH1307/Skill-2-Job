@@ -1,0 +1,1 @@
+ALTER TABLE student_profile ADD COLUMN photo_filename VARCHAR(255) NULL;

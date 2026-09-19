@@ -39,6 +39,10 @@ const BRANCH_COLORS: Record<string, string> = {
     'Electronics': '#f59e0b', 'Mechanical': '#ef4444',
     'Civil': '#10b981', 'Electrical': '#8b5cf6',
 };
+const STAT_YEARS = Array.from(
+    { length: new Date().getFullYear() - 2021 + 1 },
+    (_, index) => String(2021 + index),
+);
 
 export default function Stats() {
     const { user, logout } = useAuth();
@@ -96,7 +100,7 @@ export default function Stats() {
                         📊 Placement Statistics
                     </h1>
                     <p style={{ color: '#94a3b8', fontSize: '0.85rem', margin: '4px 0 0' }}>
-                        ATMECE — Placement Data 2021–2025
+                        ATMECE — Placement Data 2021–{new Date().getFullYear()}
                     </p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -114,10 +118,10 @@ export default function Stats() {
             <div style={{ maxWidth: '1300px', margin: '0 auto', padding: '2rem 1.5rem' }}>
                 {/* Year filter */}
                 <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
-                    {['', '2021', '2022', '2023', '2024', '2025'].map(y => (
+                    {['', ...STAT_YEARS].map(y => (
                         <button key={y} onClick={() => setYearFilter(y)}
                             style={{
-                                padding: '0.5rem 1.2rem', borderRadius: '20px', border: 'none',
+                                padding: '0.5rem 1.2rem', borderRadius: '20px',
                                 cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', transition: 'all 0.2s',
                                 background: yearFilter === y ? '#4f46e5' : 'var(--surface)',
                                 color: yearFilter === y ? 'white' : 'var(--text-secondary)',

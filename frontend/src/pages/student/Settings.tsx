@@ -62,12 +62,13 @@ export default function Settings() {
     placement_officer: '🎓 Placement Officer',
     admin: '🔑 Administrator',
   };
+  const dashboardPath = user?.role === 'student' ? '/student/dashboard' : '/admin/dashboard';
 
   return (
     <div className="page-container">
       <div className="page-header">
         <h1 className="page-title">Settings</h1>
-        <Link to="/student/dashboard" className="back-link">← Back to Dashboard</Link>
+        <Link to={dashboardPath} className="back-link">← Back to Dashboard</Link>
       </div>
 
       {/* ── Account Section ─────────────────────────────── */}

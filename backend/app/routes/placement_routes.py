@@ -26,6 +26,7 @@ def list_student_drives():
     profile = StudentProfile.query.filter_by(user_id=g.current_user["user_id"]).first()
     if profile is None:
         return jsonify({"error": {"code": "NOT_FOUND", "message": "Student profile not found", "fields": {}}}), 404
+    _finalize_missed_drives(profile)
     registrations = {item.drive_id: item for item in DriveRegistration.query.filter_by(profile_id=profile.id).all()}
     drives = []
     for drive in PlacementDrive.query.filter(PlacementDrive.status == "open").order_by(PlacementDrive.drive_date.asc()).all():
@@ -47,8 +48,10 @@ def register_for_drive(job_role_id):
     drive = db.session.get(PlacementDrive, job_role_id)
     if profile is None or drive is None or drive.status != "open":
         return jsonify({"error": {"code": "NOT_FOUND", "message": "Active drive not found", "fields": {}}}), 404
-    if not _drive_eligible(profile, drive):
-        return jsonify({"error": {"code": "NOT_ELIGIBLE", "message": "You do not meet this drive's eligibility criteria.", "fields": {}}}), 403
+    _finalize_missed_drives(profile)
+    eligible, eligibility_reasons = _drive_eligibility(profile, drive)
+    if not eligible:
+        return jsonify({"error": {"code": "NOT_ELIGIBLE", "message": "You do not meet this drive's eligibility criteria.", "fields": {"eligibility_reasons": eligibility_reasons}}}), 403
     if drive.registration_deadline and drive.registration_deadline < datetime.now(timezone.utc).replace(tzinfo=None):
         return jsonify({"error": {"code": "DEADLINE_PASSED", "message": "The registration deadline for this drive has passed.", "fields": {}}}), 403
     if profile.missed_drive_blocks > 0:
@@ -97,7 +100,52 @@ def _drive_eligibility(profile, drive):
         years = []
     if years and profile.graduation_year not in years:
         reasons.append(f"This drive accepts graduation years {', '.join(str(year) for year in years)}; your year is {profile.graduation_year or 'not provided'}.")
+    previous_placement = (
+        PlacementRecord.query
+        .filter(
+            PlacementRecord.profile_id == profile.id,
+            PlacementRecord.package_lpa.isnot(None),
+        )
+        .order_by(PlacementRecord.package_lpa.desc())
+        .first()
+    )
+    if previous_placement and drive.package_lpa is not None:
+        minimum_package = previous_placement.package_lpa * 2
+        if drive.package_lpa < minimum_package:
+            reasons.append(
+                f"Since you are previously placed for {_format_lpa(previous_placement.package_lpa)}, "
+                f"you are not allowed to attend this drive offering {_format_lpa(drive.package_lpa)}. "
+                f"You are only allowed to attend drives offering {_format_lpa(minimum_package)} and above."
+            )
     return not reasons, reasons
+
+
+def _format_lpa(package_lpa):
+    """Format a placement package consistently in policy messages."""
+    return f"₹{package_lpa:g} LPA"
+
+
+def _finalize_missed_drives(profile):
+    """Automatically apply the policy block after a registered drive ends."""
+    today = datetime.now(timezone.utc).date()
+    registrations = DriveRegistration.query.filter_by(profile_id=profile.id).all()
+    missed_count = 0
+
+    for registration in registrations:
+        drive = registration.drive
+        if (
+            drive is not None
+            and drive.drive_date < today
+            and registration.status == "registered"
+            and not registration.attended
+        ):
+            registration.status = "missed"
+            registration.marked_at = datetime.now(timezone.utc)
+            missed_count += 1
+
+    if missed_count:
+        profile.missed_drive_blocks += missed_count * 2
+        db.session.commit()
 
 
 @placement_bp.route("/drive-management", methods=["GET", "POST"])

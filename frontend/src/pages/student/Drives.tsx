@@ -33,7 +33,7 @@ export default function Drives() {
 
   return <div className="page-container-wide">
     <div className="page-header"><div><h1 className="page-title">Placement Drives</h1><p className="text-muted">Register before the deadline and enter the code on the drive day.</p></div><Link to="/student/dashboard" className="back-link">Back to Dashboard</Link></div>
-    {blocks > 0 && <div className="alert alert-error"><strong>Registration blocked:</strong> you have {blocks} drive(s) remaining because you missed an eligible registration. This block does not apply after you are placed.</div>}
+    {blocks > 0 && <div className="alert alert-error"><strong>Placement policy restriction:</strong> you registered for an eligible drive but did not verify attendance. You are not allowed to register for the next {blocks} placement drive(s). This restriction does not apply after you are placed.</div>}
     {error && <div className="alert alert-error">{error}</div>}
     <div className="job-list">{drives.map((drive) => <article className="job-card" key={drive.id}>
       <div className="job-card-header"><div><h2 className="job-title">{drive.title}</h2><p className="job-company">{drive.company_name} · {drive.job_title}</p></div><span className="score-badge">{drive.drive_date}</span></div>

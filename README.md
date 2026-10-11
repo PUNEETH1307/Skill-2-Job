@@ -3,13 +3,15 @@
 <div align="center">
 
 ![Skill2Job Banner](https://img.shields.io/badge/Skill2Job-AI%20Placement%20System-4f46e5?style=for-the-badge&logo=graduation-cap)
-![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python)
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python)
 ![Flask](https://img.shields.io/badge/Flask-3.1-000000?style=flat-square&logo=flask)
 ![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript)
 ![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?style=flat-square&logo=mysql)
 
 **An intelligent placement management platform that bridges students, placement officers, and companies using AI-powered skill matching, resume generation, and placement analytics.**
+
+[Features](#features) · [Quick Start](#quick-start) · [API](#api-overview) · [Deployment](#deployment) · [Contributing](#contributing)
 
 </div>
 
@@ -23,7 +25,7 @@
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Prerequisites](#prerequisites)
-- [Installation & Setup](#installation--setup)
+- [Quick Start](#quick-start)
 - [Running the Project](#running-the-project)
 - [Default Accounts](#default-accounts)
 - [API Overview](#api-overview)
@@ -43,6 +45,8 @@ Skill2Job is a full-stack web application built as a Major Project for placement
 - Identify skill gaps and recommend courses
 - Predict placement success probability
 - Give placement officers a complete dashboard to manage shortlisting, interviews, and placements
+- Support placement drives with eligibility checks, registration, attendance verification, and missed-drive blocking
+- Provide dream-job tracking, hiring updates, notifications, interview schedules, and placement history
 
 ---
 
@@ -108,6 +112,16 @@ Skill2Job is a full-stack web application built as a Major Project for placement
 | 🧠 Skill Taxonomy       | CRUD skill taxonomy with categories and synonyms                  |
 | 📈 Placement Prediction | Train Random Forest model, batch predict all students             |
 | 📊 Full Analytics       | All coordinator features + system health metrics                  |
+
+### Platform Capabilities
+
+- JWT authentication with role-based access for students, placement officers, and administrators
+- Skill taxonomy normalization with categories, synonyms, and vector-based matching
+- PDF/DOCX resume parsing and generated PDF resumes with selectable templates
+- Cosine-similarity job recommendations, skill-gap analysis, and course recommendations
+- Random Forest placement prediction with contributing factors
+- Search, filtering, and pagination for operational student and candidate lists
+- Optional SMTP notifications; development mode logs email content when SMTP is not configured
 
 ---
 
@@ -200,7 +214,7 @@ Make sure you have the following installed:
 
 ---
 
-## Installation & Setup
+## Quick Start
 
 ### 1. Clone the Repository
 
@@ -243,7 +257,9 @@ python -m spacy download en_core_web_sm
 Create your environment file:
 
 ```bash
-# Copy the example file
+# Windows PowerShell
+Copy-Item .env.example .env
+# Git Bash / macOS / Linux
 cp .env.example .env
 ```
 
@@ -299,7 +315,9 @@ cd ../frontend
 npm install --ignore-scripts
 node node_modules/esbuild/install.js
 
-# Copy environment file
+# Windows PowerShell
+Copy-Item .env.example .env
+# Git Bash / macOS / Linux
 cp .env.example .env
 ```
 
@@ -308,6 +326,8 @@ The default `.env` is:
 ```env
 VITE_API_BASE_URL=http://localhost:5000/api
 ```
+
+For a fuller demonstration dataset, run `python seed_all.py` from `backend` instead of `seed.py` and `seed_courses.py`.
 
 ---
 
@@ -342,13 +362,21 @@ Frontend runs at: **http://localhost:3000**
 
 ## Default Accounts
 
-After running `seed.py`, the following accounts are created:
+After running `seed.py`, the following account is created:
 
-| Role                  | Email                     | Password       | Access                |
-| --------------------- | ------------------------- | -------------- | --------------------- |
-| **Admin**             | `admin@skillbridge.com`   | `Admin@1234`   | Full system access    |
-| **Placement Officer** | `officer@skillbridge.com` | `Officer@1234` | Coordinator dashboard |
-| **Student**           | `student@skillbridge.com` | `Student@1234` | Student dashboard     |
+| Role      | Email                 | Password    | Access             |
+| --------- | --------------------- | ----------- | ------------------ |
+| **Admin** | `admin@skill2job.com` | `Admin@123` | Full system access |
+
+For demo users, run `seed_all.py`:
+
+| Role    | Email                      | Password       |
+| ------- | -------------------------- | -------------- |
+| Admin   | `sysadmin@skillbridge.com` | `SysAdmin1234` |
+| Admin   | `admin@skillbridge.com`    | `Admin1234`    |
+| Student | `teststudent@test.com`     | `Test@1234`    |
+
+Change all seeded passwords before using the application outside local development.
 
 > **First time setup without seed:** Register at `/register` as a student, then use the setup endpoint to create your first admin:
 >
@@ -366,18 +394,19 @@ After running `seed.py`, the following accounts are created:
 
 All API routes are prefixed with `/api`.
 
-| Module        | Base Path            | Description                                            |
-| ------------- | -------------------- | ------------------------------------------------------ |
-| Auth          | `/api/auth`          | Register, login, logout, password reset, role update   |
-| Profile       | `/api/profile`       | Student profile CRUD                                   |
-| Skills        | `/api/skills`        | Skill analysis                                         |
-| Jobs          | `/api/jobs`          | Recommendations, skill gap, courses                    |
-| Resume        | `/api/resume`        | Upload, parse, generate PDF                            |
-| Dashboard     | `/api/dashboard`     | Role-specific summaries                                |
-| Admin         | `/api/admin`         | Companies, jobs, shortlist, analytics, users, taxonomy |
-| Interviews    | `/api/interviews`    | Schedule and manage interviews                         |
-| Placements    | `/api/placements`    | Record confirmed placements                            |
-| Notifications | `/api/notifications` | Send announcements                                     |
+| Module        | Base Path            | Description                                                                 |
+| ------------- | -------------------- | --------------------------------------------------------------------------- |
+| Auth          | `/api/auth`          | Register, login, logout, password reset, role update                        |
+| Profile       | `/api/profile`       | Student profile CRUD                                                        |
+| Skills        | `/api/skills`        | Skill analysis                                                              |
+| Jobs          | `/api/jobs`          | Recommendations, skill gap, courses                                         |
+| Resume        | `/api/resume`        | Upload, parse, generate PDF                                                 |
+| Dashboard     | `/api/dashboard`     | Role-specific summaries                                                     |
+| Admin         | `/api/admin`         | Companies, jobs, shortlist, analytics, users, taxonomy, courses, prediction |
+| Interviews    | `/api/interviews`    | Schedule and manage interviews                                              |
+| Placements    | `/api/placements`    | Placement records and placement-drive management                            |
+| Notifications | `/api/notifications` | Send and receive announcements                                              |
+| Statistics    | `/api/stats`         | Cross-role placement statistics                                             |
 
 ---
 
@@ -422,10 +451,13 @@ Login redirects automatically based on role:
 | `SPACY_MODEL`              | No       | SpaCy model (default: `en_core_web_sm`)            |
 | `UPLOAD_FOLDER`            | No       | Resume upload path (default: `uploads`)            |
 | `FRONTEND_URL`             | No       | For email links (default: `http://localhost:3000`) |
+| `CORS_ORIGINS`             | No       | Comma-separated allowed frontend origins           |
 | `SMTP_HOST`                | No       | SMTP server (leave empty for dev logging)          |
 | `SMTP_PORT`                | No       | SMTP port (default: 587)                           |
 | `SMTP_USER`                | No       | SMTP username                                      |
 | `SMTP_PASSWORD`            | No       | SMTP password                                      |
+| `FROM_EMAIL`               | No       | Sender email address                               |
+| `FROM_NAME`                | No       | Sender display name                                |
 
 ### Frontend (`frontend/.env`)
 
@@ -437,7 +469,7 @@ Login redirects automatically based on role:
 
 ## Database Schema
 
-The full schema is in [`database/schema.sql`](database/schema.sql).
+The reference schema is in [`database/schema.sql`](database/schema.sql). For local development, the application creates its SQLAlchemy tables with `db.create_all()` during setup. Keep `DATABASE_URL` and the database name consistent with the environment you are running; Docker Compose uses `skill2job`, while the example local connection string uses `skillbridge`.
 
 Key tables:
 
@@ -457,7 +489,9 @@ Key tables:
 
 ---
 
-## Docker (Optional)
+## Deployment
+
+### Docker Compose
 
 Run the full stack with Docker Compose:
 
@@ -468,6 +502,18 @@ docker-compose up --build
 # Stop
 docker-compose down
 ```
+
+The Compose stack starts MySQL, the Gunicorn backend, and the Nginx-served frontend. Copy the root `.env.example` to `.env` first and replace the development secrets before exposing the stack publicly.
+
+### Render + Vercel
+
+The repository also includes a deployment guide for hosting the backend on Render, the frontend on Vercel, and MySQL on a managed provider:
+
+- [DEPLOYMENT.md](DEPLOYMENT.md)
+- [render.yaml](render.yaml)
+- [frontend/vercel.json](frontend/vercel.json)
+
+Configure `VITE_API_BASE_URL` on Vercel and `CORS_ORIGINS` / `FRONTEND_URL` on the backend with the deployed frontend origin.
 
 ---
 
@@ -480,14 +526,22 @@ venv\Scripts\activate
 # Run all tests
 pytest
 
-# Run with coverage
-pytest --cov=app tests/
+# Run with coverage (install pytest-cov separately if needed)
+python -m pytest --cov=app tests/
 
 # Run only unit tests
 pytest tests/unit/
 
 # Run only integration tests
 pytest tests/integration/
+```
+
+Frontend checks:
+
+```bash
+cd frontend
+npm run build
+npm run lint
 ```
 
 ---

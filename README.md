@@ -32,6 +32,9 @@
 - [Role-Based Access](#role-based-access)
 - [Environment Variables](#environment-variables)
 - [Database Schema](#database-schema)
+- [Deployment](#deployment)
+- [Running Tests](#running-tests)
+- [Operational Notes](#operational-notes)
 - [Contributing](#contributing)
 
 ---
@@ -78,31 +81,40 @@ Skill2Job is a full-stack web application built as a Major Project for placement
 
 ### Student Interface
 
-| Feature           | Description                                                           |
-| ----------------- | --------------------------------------------------------------------- |
-| 🔐 Auth           | Register, login, forgot/reset password, JWT sessions                  |
-| 👤 Profile        | Academic details, skills, projects, certifications                    |
-| 📄 Resume         | Upload PDF/DOCX for NLP parsing, generate AI-enhanced PDF resume      |
-| 🧠 Skill Analysis | Categorized skill breakdown with taxonomy matching                    |
-| 💼 Job Matches    | Cosine similarity-based ranked job recommendations                    |
-| 📊 Skill Gap      | Missing skills per job role with deficit scores                       |
-| 📚 Courses        | Recommended courses (Coursera, Udemy, NPTEL, YouTube) per skill gap   |
-| 🤖 AI Prediction  | Random Forest placement success probability with contributing factors |
-| ⚙️ Settings       | Change password, notification preferences                             |
+| Feature             | Description                                                           |
+| ------------------- | --------------------------------------------------------------------- |
+| 🔐 Auth             | Register, login, forgot/reset password, JWT sessions                  |
+| 👤 Profile          | Academic details, skills, projects, certifications                    |
+| 📄 Resume           | Upload PDF/DOCX for NLP parsing, generate AI-enhanced PDF resume      |
+| 🧠 Skill Analysis   | Categorized skill breakdown with taxonomy matching                    |
+| 💼 Job Matches      | Cosine similarity-based ranked job recommendations                    |
+| 📊 Skill Gap        | Missing skills per job role with deficit scores                       |
+| 📚 Courses          | Recommended courses (Coursera, Udemy, NPTEL, YouTube) per skill gap   |
+| 🤖 AI Prediction    | Random Forest placement success probability with contributing factors |
+| 🎯 Dream Jobs       | Save up to three target roles with AI match scores and skill gaps     |
+| 📡 Hiring Updates   | View live job links and preparation resources for saved dream jobs    |
+| 🗓️ Placement Drives | Check eligibility, register, verify attendance, and track status      |
+| 🔔 Notifications    | Read placement announcements and interview/placement updates          |
+| 🗣️ Interviews       | View scheduled interviews, results, and meeting details               |
+| 📈 Placement Stats  | View placement history and cross-role statistics                      |
+| ⚙️ Settings         | Change password, notification preferences                             |
 
 ### Placement Officer Interface
 
-| Feature          | Description                                                                   |
-| ---------------- | ----------------------------------------------------------------------------- |
-| 📋 Dashboard     | Placement overview, active jobs, recent shortlists, top skills demand         |
-| 🏢 Companies     | Add and manage company records                                                |
-| 💼 Job Roles     | Create job roles with auto skill vector generation                            |
-| 👥 Shortlist     | Rank candidates by compatibility, mark shortlisted, send email alerts         |
-| 🗓️ Interviews    | Schedule interviews, update status/result, auto-create placement on selection |
-| 🎓 Placements    | Record confirmed placements with package details                              |
-| 🔔 Notifications | Broadcast announcements to all students, shortlisted, or by department        |
-| 📊 Analytics     | Placement stats, department/company breakdown, skill demand chart             |
-| 📚 Courses       | Add course recommendations per skill                                          |
+| Feature             | Description                                                                   |
+| ------------------- | ----------------------------------------------------------------------------- |
+| 📋 Dashboard        | Placement overview, active jobs, recent shortlists, top skills demand         |
+| 🏢 Companies        | Add and manage company records                                                |
+| 💼 Job Roles        | Create job roles with auto skill vector generation                            |
+| 👥 Shortlist        | Rank candidates by compatibility, mark shortlisted, send email alerts         |
+| 🗓️ Interviews       | Schedule interviews, update status/result, auto-create placement on selection |
+| 🎓 Placements       | Record confirmed placements with package details                              |
+| 🔔 Notifications    | Broadcast announcements to all students, shortlisted, or by department        |
+| 🗓️ Placement Drives | Create drives, define eligibility, manage registration and attendance         |
+| 📊 Analytics        | Placement stats, department/company breakdown, skill demand chart             |
+| 📚 Courses          | Add course recommendations per skill                                          |
+| 📈 Statistics       | View placement summaries and student outcomes                                 |
+| ⚙️ Settings         | Manage account settings                                                       |
 
 ### Admin Interface
 
@@ -113,13 +125,25 @@ Skill2Job is a full-stack web application built as a Major Project for placement
 | 📈 Placement Prediction | Train Random Forest model, batch predict all students             |
 | 📊 Full Analytics       | All coordinator features + system health metrics                  |
 
+### Core Workflows
+
+1. **Student career preparation:** register → complete profile → upload or parse a resume → analyze skills → review job matches → inspect skill gaps → follow recommended courses.
+2. **Dream-job planning:** select a company and active role → save up to three Dream Jobs → review the AI match score and missing skills → open hiring links and preparation resources → remove or replace saved targets.
+3. **Placement-drive participation:** view eligible drives → register before the deadline → verify attendance with the drive code → track registration and attendance status. Missed eligible registrations can temporarily block future registrations.
+4. **Placement coordination:** create companies and roles → define eligibility → publish drives → review eligible and ineligible students → filter and paginate candidates → shortlist students → schedule interviews → record results and confirmed placements.
+5. **Administration:** manage users and roles → maintain the skill taxonomy and synonyms → add course recommendations → train or run placement predictions → review analytics and statistics.
+
 ### Platform Capabilities
 
 - JWT authentication with role-based access for students, placement officers, and administrators
 - Skill taxonomy normalization with categories, synonyms, and vector-based matching
 - PDF/DOCX resume parsing and generated PDF resumes with selectable templates
+- Resume upload history, download, preview, profile autofill, and profile-photo support
 - Cosine-similarity job recommendations, skill-gap analysis, and course recommendations
+- Company-specific Dream Jobs with a three-role limit, AI match scoring, missing-skill analysis, hiring links, and preparation resources
 - Random Forest placement prediction with contributing factors
+- Placement-drive rules for minimum CGPA, graduation year, backlog requirements, registration deadlines, attendance codes, and missed-drive blocking
+- Interview scheduling, status/result tracking, email alerts, confirmed placements, and placement history
 - Search, filtering, and pagination for operational student and candidate lists
 - Optional SMTP notifications; development mode logs email content when SMTP is not configured
 
@@ -179,6 +203,8 @@ Skill2Job/
 │   ├── run.py
 │   ├── seed.py                 # Seed admin + sample data
 │   ├── seed_courses.py         # Seed course recommendations
+│   ├── seed_all.py             # Seed a complete demonstration dataset
+│   ├── migrations/             # Tracked SQL schema changes
 │   └── requirements.txt
 ├── frontend/                   # React + TypeScript SPA
 │   ├── src/
@@ -351,7 +377,7 @@ Backend runs at: **http://localhost:5000**
 
 ```bash
 cd frontend
-npx vite
+npm run dev
 ```
 
 Frontend runs at: **http://localhost:3000**
@@ -408,6 +434,37 @@ All API routes are prefixed with `/api`.
 | Notifications | `/api/notifications` | Send and receive announcements                                              |
 | Statistics    | `/api/stats`         | Cross-role placement statistics                                             |
 
+### Important Endpoint Groups
+
+| Area                   | Endpoints                                                                                            | Purpose                                                                                    |
+| ---------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Authentication         | `/api/auth/register`, `/login`, `/logout`, `/forgot-password`, `/reset-password`, `/change-password` | Account lifecycle, JWT sessions, and password management                                   |
+| Student profile        | `/api/profile/profile`, `/api/profile/profile/photo`                                                 | Academic profile, skills, projects, certifications, and profile photo                      |
+| Skill analysis         | `/api/skills/analysis`                                                                               | Normalize and categorize profile skills and generate skill insights                        |
+| Job matching           | `/api/jobs/recommendations`                                                                          | Ranked job-role recommendations based on skill compatibility                               |
+| Dream Jobs             | `/api/jobs/options`, `/api/jobs/dream-jobs`, `/api/jobs/dream-jobs/updates`                          | Select target roles, save up to three, calculate match gaps, and retrieve hiring resources |
+| Skill gaps and courses | `/api/jobs/<id>/skill-gap`, `/api/jobs/<id>/courses`                                                 | Explain missing skills and return learning recommendations                                 |
+| Resumes                | `/api/resume/parse-for-profile`, `/upload`, `/uploads`, `/generate`, `/download`, `/preview`         | Parse, store, list, generate, download, and preview resumes                                |
+| Dashboards             | `/api/dashboard/student`, `/coordinator`, `/admin`, `/student/prediction`                            | Role-specific summaries and placement prediction                                           |
+| Companies and roles    | `/api/admin/companies`, `/api/admin/jobs`                                                            | Manage employers and job roles                                                             |
+| Shortlisting           | `/api/admin/jobs/<id>/shortlist`                                                                     | Rank candidates and manage job shortlists                                                  |
+| Drives                 | `/api/placements/drives`, `/api/placements/drive-management`                                         | Student registration and officer drive management                                          |
+| Interviews             | `/api/interviews`, `/api/interviews/my`                                                              | Schedule, update, delete, and view interviews                                              |
+| Notifications          | `/api/notifications`, `/api/notifications/student`                                                   | Broadcast and retrieve notifications                                                       |
+| Placements             | `/api/placements`, `/api/placements/my`                                                              | Create, update, delete, and view placement records                                         |
+| Admin tools            | `/api/admin/users`, `/api/admin/skills/taxonomy`, `/api/admin/courses`, `/api/admin/predictions/*`   | User management, taxonomy, courses, and ML prediction operations                           |
+
+Protected endpoints require the JWT returned by `/api/auth/login`. Access is restricted by role where indicated in the route implementation.
+
+### Frontend Route Map
+
+| Area                        | Routes                                                                                                                                                                                                                                                     |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public                      | `/`, `/login`, `/register`, `/forgot-password`, `/reset-password`                                                                                                                                                                                          |
+| Student                     | `/student/dashboard`, `/student/profile`, `/student/skills`, `/student/jobs`, `/student/dream-jobs`, `/student/drives`, `/student/jobs/:id/gap`, `/student/resume`, `/student/settings`, `/student/notifications`, `/student/interviews`, `/student/stats` |
+| Placement officer and admin | `/admin/dashboard`, `/admin/companies`, `/admin/jobs`, `/admin/shortlist`, `/admin/analytics`, `/admin/courses`, `/admin/interviews`, `/admin/notifications`, `/admin/placements`, `/admin/drives`, `/admin/stats`, `/admin/settings`                      |
+| Admin only                  | `/admin/users`, `/admin/skills`                                                                                                                                                                                                                            |
+
 ---
 
 ## Role-Based Access
@@ -420,13 +477,14 @@ Admin
 
 Placement Officer
   └── Companies, Job Roles, Shortlisting
-  └── Interviews, Placements, Notifications
-  └── Analytics & Placement Prediction
+  └── Placement Drives, Interviews, Placements, Notifications
+  └── Courses, Analytics, Statistics & Placement Prediction
 
 Student
   └── Profile, Resume, Skill Analysis
-  └── Job Recommendations, Skill Gap
-  └── Course Recommendations, Settings
+  └── Job Recommendations, Dream Jobs, Hiring Updates, Skill Gap
+  └── Courses, Placement Drives, Interviews, Notifications, Statistics
+  └── Settings and password management
 ```
 
 Login redirects automatically based on role:
@@ -473,19 +531,24 @@ The reference schema is in [`database/schema.sql`](database/schema.sql). For loc
 
 Key tables:
 
-| Table                   | Description                                   |
-| ----------------------- | --------------------------------------------- |
-| `user`                  | All users (students, officers, admins)        |
-| `student_profile`       | Academic details, skills JSON, skill vector   |
-| `company`               | Company records                               |
-| `job_role`              | Job positions with skill vectors              |
-| `shortlist`             | Shortlisted candidates per job                |
-| `interview`             | Interview scheduling and results              |
-| `placement_record`      | Confirmed placements with package             |
-| `skill_taxonomy`        | Canonical skills with categories and synonyms |
-| `course_recommendation` | Courses mapped to skills                      |
-| `notification`          | Sent announcements                            |
-| `password_reset_token`  | Temporary reset tokens                        |
+| Table                   | Description                                    |
+| ----------------------- | ---------------------------------------------- |
+| `user`                  | All users (students, officers, admins)         |
+| `student_profile`       | Academic details, skills JSON, skill vector    |
+| `company`               | Company records                                |
+| `job_role`              | Job positions with skill vectors               |
+| `dream_job`             | Student-specific saved target roles            |
+| `placement_drive`       | Drive dates, eligibility rules, and attendance |
+| `drive_registration`    | Student registration and attendance status     |
+| `drive_shortlist`       | Drive-specific candidate shortlist             |
+| `shortlist`             | Shortlisted candidates per job                 |
+| `interview`             | Interview scheduling and results               |
+| `placement_record`      | Confirmed placements with package              |
+| `skill_taxonomy`        | Canonical skills with categories and synonyms  |
+| `course_recommendation` | Courses mapped to skills                       |
+| `notification`          | Sent announcements                             |
+| `resume_upload`         | Uploaded resume metadata and file history      |
+| `password_reset_token`  | Temporary reset tokens                         |
 
 ---
 
@@ -543,6 +606,17 @@ cd frontend
 npm run build
 npm run lint
 ```
+
+---
+
+## Operational Notes
+
+- Resume uploads accept PDF and DOCX files and are limited to 10 MB. Uploaded resumes, generated resumes, and profile photos are stored under the configured `UPLOAD_FOLDER`.
+- SMTP is optional. When SMTP credentials are empty in development, email content is logged instead of delivered.
+- The backend initializes Flask-Migrate and supports `db.create_all()` for first-time local setup. Use the SQL files under `database/migrations/` for tracked schema changes in environments that require migration control.
+- Automated tests use an in-memory SQLite database through the testing configuration; normal development and deployment use MySQL.
+- Local-disk uploads are not durable on ephemeral hosting. Use persistent storage or object storage for production resume and profile-photo retention.
+- Replace development secrets, seeded passwords, and default database credentials before deployment. Set `FLASK_CONFIG=production`, `CORS_ORIGINS`, and `FRONTEND_URL` for a deployed frontend.
 
 ---
 

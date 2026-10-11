@@ -1,3 +1,5 @@
+import io
+
 """Integration tests for student profile API routes.
 
 Tests the GET /api/profile and PUT /api/profile endpoints through
@@ -268,3 +270,26 @@ class TestUpdateProfile:
         assert resp.status_code == 400
         data = resp.get_json()
         assert data["error"]["code"] == "VALIDATION_ERROR"
+
+
+class TestProfilePhotoUpload:
+    """Tests for the profile photo upload endpoint."""
+
+    def test_upload_profile_photo_allows_png_by_extension_when_mimetype_is_missing(self, client):
+        """PNG uploads should be accepted when the browser provides no MIME type."""
+        _register_student(client)
+        token = _login_user(client)
+
+        image_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+        resp = client.post(
+            "/api/profile/photo",
+            headers={"Authorization": f"Bearer {token}"},
+            data={
+                "photo": (io.BytesIO(image_bytes), "avatar.png"),
+            },
+            content_type="multipart/form-data",
+        )
+
+        assert resp.status_code == 200, resp.get_data(as_text=True)
+        data = resp.get_json()
+        assert data["message"] == "Profile photo updated"

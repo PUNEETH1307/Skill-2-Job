@@ -94,7 +94,31 @@ def upload_profile_photo():
     photo = request.files.get("photo")
     if not photo or not photo.filename:
         return jsonify({"error": {"code": "VALIDATION_ERROR", "message": "Please select a photo"}}), 400
-    if photo.mimetype not in {"image/jpeg", "image/png", "image/webp"}:
+
+    filename = secure_filename(photo.filename)
+    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    allowed_extensions = {"jpg", "jpeg", "png", "webp"}
+    allowed_mimetypes = {
+        "image/jpeg",
+        "image/jpg",
+        "image/pjpeg",
+        "image/png",
+        "image/x-png",
+        "image/webp",
+    }
+    mime_to_extension = {
+        "image/jpeg": "jpg",
+        "image/jpg": "jpg",
+        "image/pjpeg": "jpg",
+        "image/png": "png",
+        "image/x-png": "png",
+        "image/webp": "webp",
+    }
+
+    is_valid_extension = extension in allowed_extensions
+    is_valid_mimetype = (photo.mimetype or "") in allowed_mimetypes
+    resolved_extension = extension if is_valid_extension else mime_to_extension.get(photo.mimetype or "", "")
+    if not (is_valid_extension or is_valid_mimetype) or not resolved_extension:
         return jsonify({"error": {"code": "VALIDATION_ERROR", "message": "Only JPG, PNG, and WEBP photos are allowed"}}), 400
 
     from app import db
@@ -105,9 +129,7 @@ def upload_profile_photo():
         profile = StudentProfile(user_id=user_id)
         db.session.add(profile)
 
-    filename = secure_filename(photo.filename)
-    extension = filename.rsplit(".", 1)[-1].lower()
-    stored_filename = f"profile_{user_id}.{extension}"
+    stored_filename = f"profile_{user_id}.{resolved_extension}"
     upload_folder = current_app.config.get("UPLOAD_FOLDER")
     os.makedirs(upload_folder, exist_ok=True)
     photo.save(os.path.join(upload_folder, stored_filename))

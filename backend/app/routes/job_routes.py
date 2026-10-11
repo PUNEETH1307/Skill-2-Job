@@ -16,6 +16,7 @@ from app import db
 from app.models import StudentProfile, JobRole, CourseRecommendation, Company, DreamJob, SkillTaxonomy
 from app.services.job_matching import JobMatchingEngine
 from app.services.skill_analyzer import SkillAnalyzer
+from app.services.hiring_updates import get_hiring_updates
 from app.utils.auth_decorator import jwt_required, role_required
 
 job_bp = Blueprint("jobs", __name__, url_prefix="/api/jobs")
@@ -94,6 +95,37 @@ def delete_dream_job(id):
     db.session.delete(record)
     db.session.commit()
     return jsonify({"message": "Dream Job removed"}), 200
+
+
+@job_bp.route("/dream-jobs/updates", methods=["GET"])
+@jwt_required
+@role_required("student")
+def dream_job_updates():
+    """Return current hiring links and preparation resources for saved roles."""
+    profile = StudentProfile.query.filter_by(user_id=g.current_user["user_id"]).first()
+    if profile is None:
+        return jsonify({"error": {"code": "NOT_FOUND", "message": "Student profile not found", "fields": {}}}), 404
+
+    role_id = request.args.get("role_id", type=int)
+    query = DreamJob.query.filter_by(profile_id=profile.id)
+    if role_id:
+        query = query.filter_by(job_role_id=role_id)
+
+    updates = []
+    for record in query.all():
+        role = record.job_role
+        company_name = role.company.name if role.company else ""
+        hiring = get_hiring_updates(company_name, role.title)
+        updates.append({
+            "dream_job_id": record.id,
+            "job_role_id": role.id,
+            "company_name": company_name,
+            "role_title": role.title,
+            "live_jobs": hiring["live_jobs"],
+            "preparation_resources": hiring["preparation_resources"],
+            "last_checked_at": hiring["last_checked_at"],
+        })
+    return jsonify(updates), 200
 
 
 def _dream_job_result(record):

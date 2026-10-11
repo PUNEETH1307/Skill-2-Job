@@ -21,12 +21,24 @@ interface DreamJob {
   analysis_status: string;
 }
 
+interface HiringUpdate {
+  dream_job_id: number;
+  job_role_id: number;
+  company_name: string;
+  role_title: string;
+  last_checked_at: string;
+  live_jobs: Array<{ title: string; company_name: string; apply_url: string; source: string; location?: string | null }>;
+  preparation_resources: Array<{ title: string; provider: string; url: string }>;
+}
+
 interface Company { id: number; name: string; }
 
 export default function DreamJobs() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [roles, setRoles] = useState<JobRole[]>([]);
   const [dreamJobs, setDreamJobs] = useState<DreamJob[]>([]);
+  const [updates, setUpdates] = useState<HiringUpdate[]>([]);
+  const [updateRoleId, setUpdateRoleId] = useState('all');
   const [companyId, setCompanyId] = useState('');
   const [roleId, setRoleId] = useState('');
   const [loading, setLoading] = useState(true);
@@ -42,6 +54,8 @@ export default function DreamJobs() {
       setCompanies(options.data.companies ?? []);
       setRoles(options.data.job_roles ?? []);
       setDreamJobs(saved.data ?? []);
+      const updateResponse = await api.get('/jobs/dream-jobs/updates');
+      setUpdates(updateResponse.data ?? []);
     } catch (err: any) {
       setError(err.response?.data?.error?.message ?? 'Unable to load Dream Jobs.');
     } finally {
@@ -72,8 +86,21 @@ export default function DreamJobs() {
     try {
       await api.delete(`/jobs/dream-jobs/${id}`);
       setDreamJobs((current) => current.filter((job) => job.id !== id));
+      setUpdates((current) => current.filter((update) => update.dream_job_id !== id));
     } catch (err: any) {
       setError(err.response?.data?.error?.message ?? 'Unable to remove Dream Job.');
+    }
+  };
+
+  const loadUpdates = async (roleIdFilter: string) => {
+    setUpdateRoleId(roleIdFilter);
+    try {
+      const response = await api.get('/jobs/dream-jobs/updates', {
+        params: roleIdFilter === 'all' ? {} : { role_id: Number(roleIdFilter) },
+      });
+      setUpdates(response.data ?? []);
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message ?? 'Unable to refresh hiring updates.');
     }
   };
 
@@ -139,6 +166,28 @@ export default function DreamJobs() {
           {!dreamJobs.length && <p className="empty-text">No Dream Jobs saved yet.</p>}
         </div>
       )}
+
+      {!!dreamJobs.length && <section className="form-card">
+        <div className="job-card-header">
+          <div>
+            <h2 className="form-title">Hiring updates and preparation</h2>
+            <p className="text-muted">Current apply links and previous-year question resources for your saved roles.</p>
+          </div>
+          <label className="label-col">Filter by role
+            <select className="input" value={updateRoleId} onChange={(event) => void loadUpdates(event.target.value)}>
+              <option value="all">All saved roles</option>
+              {dreamJobs.map((job) => <option key={job.job_role_id} value={job.job_role_id}>{job.title} at {job.company_name}</option>)}
+            </select>
+          </label>
+        </div>
+        {updates.map((update) => <article className="job-card" key={update.dream_job_id}>
+          <div className="job-card-header"><div><h3 className="job-title">{update.role_title}</h3><p className="job-company">{update.company_name}</p></div><span className="text-muted">Checked {new Date(update.last_checked_at).toLocaleString()}</span></div>
+          <h4>Current openings</h4>
+          {update.live_jobs.map((opening) => <p key={opening.apply_url}><a href={opening.apply_url} target="_blank" rel="noreferrer">{opening.title}</a> <span className="text-muted">({opening.source}{opening.location ? `, ${opening.location}` : ''})</span></p>)}
+          <h4>Previous-year questions and preparation</h4>
+          {update.preparation_resources.map((resource) => <p key={resource.url}><a href={resource.url} target="_blank" rel="noreferrer">{resource.title}</a> <span className="text-muted">via {resource.provider}</span></p>)}
+        </article>)}
+      </section>}
     </div>
   );
 }

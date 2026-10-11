@@ -114,20 +114,38 @@ export default function Profile() {
 
   const handlePhotoUpload = async (file: File | undefined) => {
     if (!file) return;
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    const maxPhotoSize = 10 * 1024 * 1024;
+    if (file.size > maxPhotoSize) {
+      setErrors({ general: 'Photo must be smaller than 10 MB.' });
+      return;
+    }
+    const acceptedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+    const extension = file.name?.split('.').pop()?.toLowerCase() ?? '';
+    const hasAcceptedMime = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/pjpeg', 'image/x-png'].includes(file.type);
+    const hasAcceptedExtension = acceptedExtensions.includes(extension);
+    if (!hasAcceptedMime && !hasAcceptedExtension) {
       setErrors({ general: 'Only JPG, PNG, and WEBP photos are allowed.' });
       return;
     }
     setPhotoUploading(true);
     try {
       const data = new FormData(); data.append('photo', file);
-      await api.post('/profile/photo', data, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const token = localStorage.getItem('token');
+      const uploadResponse = await fetch(`${api.defaults.baseURL}/profile/photo`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: data,
+      });
+      if (!uploadResponse.ok) {
+        const body = await uploadResponse.json().catch(() => ({}));
+        throw new Error(body?.error?.message ?? 'Failed to upload profile photo.');
+      }
       const res = await api.get('/profile/photo', { responseType: 'blob' });
       if (photoUrl) URL.revokeObjectURL(photoUrl);
       setPhotoUrl(URL.createObjectURL(res.data));
       showToast('Profile photo updated!', 'success');
-    } catch {
-      setErrors({ general: 'Failed to upload profile photo.' });
+    } catch (err) {
+      setErrors({ general: err instanceof Error ? err.message : 'Failed to upload profile photo.' });
     } finally { setPhotoUploading(false); }
   };
 
@@ -415,7 +433,7 @@ export default function Profile() {
           <p className="muted-text">Used in photo resume templates. JPG, PNG, or WEBP.</p>
           <label className="btn btn-secondary">
             {photoUploading ? 'Uploading...' : 'Upload / Replace Photo'}
-            <input type="file" hidden accept="image/jpeg,image/png,image/webp" disabled={photoUploading}
+            <input type="file" hidden accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp,image/jpg,image/pjpeg,image/x-png" disabled={photoUploading}
               onChange={(e) => { handlePhotoUpload(e.target.files?.[0]); e.currentTarget.value = ''; }} />
           </label>
         </div>

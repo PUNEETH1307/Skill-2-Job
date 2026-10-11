@@ -132,6 +132,33 @@ class ResumeGenerator:
         safe = re.sub(r"[^A-Za-z0-9_-]+", "_", name.strip()).strip("_") or "Student"
         return f"Resume_{safe}_{date.today().isoformat()}.pdf"
 
+    def _build_pdf_with_ai_content(self, profile_dict: dict, profile, ai_content, template_id: str = "classic") -> bytes:
+        """Build a PDF resume from a validated profile and AI-generated content.
+
+        This is a compatibility helper used by the resume tests and by routes that
+        need a PDF buffer without requiring a full database round-trip.
+        """
+        if ai_content is None:
+            ai_content = None
+
+        pd = dict(profile_dict or {})
+        ex = {}
+        tid = template_id if template_id in VALID_TEMPLATES else "classic"
+        pal = PALETTES[tid]
+        kwargs = dict(pd=pd, profile=profile, pal=pal, ai=ai_content, ex=ex, photo_b64=None)
+
+        if tid == "sidebar":
+            return self._build_sidebar(**kwargs)
+        if tid == "executive":
+            return self._build_executive(**kwargs)
+        if tid == "photo_card":
+            return self._build_photo_card(**kwargs)
+        if tid == "modern":
+            return self._build_modern(**kwargs)
+        if tid == "minimal":
+            return self._build_minimal(**kwargs)
+        return self._build_classic(**kwargs)
+
     # ------------------------------------------------------------------
     # Template 1: CLASSIC (blue, traditional)
     # ------------------------------------------------------------------

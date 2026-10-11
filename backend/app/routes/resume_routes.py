@@ -405,13 +405,27 @@ def download_resume():
     template_id = _normalize_template_id(request.args.get("template", "classic"))
 
     try:
+        generator = ResumeGenerator()
+        from app.models import StudentProfile
+        profile = StudentProfile.query.filter_by(user_id=user_id).first()
+        if profile is None:
+            raise ValueError("Student profile not found")
+
+        pd = profile.to_dict()
+        user = db.session.get(User, user_id)
+        pd["name"] = user.name if user else "Student"
+        pd["email"] = user.email if user else ""
+        pd["phone"] = user.phone if user else ""
+
+        valid, missing = generator.validate_profile(pd)
+        if not valid:
+            raise ValueError(f"Profile is missing required fields: {', '.join(missing)}")
+
         upload_folder = current_app.config.get('UPLOAD_FOLDER')
         generated_path = _generated_resume_path(upload_folder, user_id, template_id)
 
         if os.path.exists(generated_path):
-            user = db.session.get(User, user_id)
-            generator = ResumeGenerator()
-            filename = generator.get_download_filename(user.name if user else "Student")
+            filename = generator.get_download_filename(pd["name"]) if pd.get("name") else generator.get_download_filename("Student")
             return send_from_directory(
                 os.path.dirname(generated_path),
                 os.path.basename(generated_path),
@@ -420,17 +434,13 @@ def download_resume():
                 mimetype="application/pdf",
             )
 
-        generator = ResumeGenerator()
-        from app.models import StudentProfile
-        profile = StudentProfile.query.filter_by(user_id=user_id).first()
         pdf_bytes = generator.generate_resume(
             user_id,
             template_id=template_id,
             photo_base64=_profile_photo_base64(profile),
         )
 
-        user = db.session.get(User, user_id)
-        filename = generator.get_download_filename(user.name)
+        filename = generator.get_download_filename(pd["name"]) if pd.get("name") else generator.get_download_filename("Student")
 
         return Response(
             pdf_bytes,

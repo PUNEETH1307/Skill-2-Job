@@ -74,6 +74,10 @@ def register_error_handlers(app):
         message = getattr(error, "description", "Resource not found")
         return _error_response("NOT_FOUND", message, 404)
 
+    @app.errorhandler(413)
+    def request_too_large(error):
+        return _error_response("VALIDATION_ERROR", "Photo must be smaller than 10 MB", 413)
+
     @app.errorhandler(409)
     def conflict(error):
         message = getattr(error, "description", "Resource conflict")

@@ -12,7 +12,7 @@ class Config:
         'UPLOAD_FOLDER',
         os.path.join(os.path.abspath(os.path.dirname(__file__)), 'uploads')
     )
-    MAX_CONTENT_LENGTH = 5 * 1024 * 1024  # 5 MB upload limit
+    MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10 MB upload limit
     ALLOWED_RESUME_EXTENSIONS = {'pdf', 'docx'}
 
 

@@ -293,6 +293,42 @@ class TestGetRecommendations:
         assert scores == sorted(scores, reverse=True)
 
 
+class TestDreamJobUpdates:
+    """Tests for live hiring and preparation updates for saved Dream Jobs."""
+
+    def test_updates_are_filtered_to_saved_role(self, client, monkeypatch):
+        from app import db as _db
+
+        token = _setup_student_with_vector(_db.session, client)
+        job_role = _seed_company_and_job(_db.session)
+        save_response = client.post(
+            "/api/jobs/dream-jobs",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"job_role_id": job_role.id},
+        )
+        assert save_response.status_code == 201
+
+        monkeypatch.setattr(
+            "app.routes.job_routes.get_hiring_updates",
+            lambda company, title: {
+                "live_jobs": [{"title": "Backend Developer", "company_name": company, "apply_url": "https://jobs.example/apply", "source": "test", "posted_at": None, "location": "Remote"}],
+                "preparation_resources": [{"title": "Previous-year questions", "provider": "Test", "url": "https://questions.example"}],
+                "last_checked_at": "2026-01-01T00:00:00Z",
+            },
+        )
+
+        response = client.get(
+            f"/api/jobs/dream-jobs/updates?role_id={job_role.id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert len(data) == 1
+        assert data[0]["job_role_id"] == job_role.id
+        assert data[0]["live_jobs"][0]["apply_url"] == "https://jobs.example/apply"
+        assert data[0]["preparation_resources"][0]["title"] == "Previous-year questions"
+
+
 # ---------------------------------------------------------------------------
 # GET /api/jobs/<id>/skill-gap
 # ---------------------------------------------------------------------------

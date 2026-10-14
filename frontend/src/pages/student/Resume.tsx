@@ -6,6 +6,7 @@ import { useToast } from '../../components/Toast';
 
 interface ResumeUploadEntry {
   id: number; original_filename: string; content_type: string; uploaded_at: string;
+  resume_variant?: 'photo' | 'no_photo'; source?: 'uploaded' | 'generated';
 }
 interface ProfileData {
   institution?: string; degree?: string; branch?: string;
@@ -68,6 +69,7 @@ export default function Resume() {
   const [uploading, setUploading] = useState(false);
   const [uploads, setUploads] = useState<ResumeUploadEntry[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadVariant, setUploadVariant] = useState<'photo' | 'no_photo'>('no_photo');
   const [error, setError] = useState('');
   const [previewUrl, setPreviewUrl] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
@@ -208,6 +210,7 @@ export default function Resume() {
     setUploading(true);
     try {
       const fd = new FormData(); fd.append('resume', selectedFile);
+      fd.append('variant', uploadVariant);
       await api.post('/resume/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       showToast('Uploaded!', 'success'); setSelectedFile(null);
       api.get('/resume/uploads').then(r => setUploads(r.data.uploads ?? []));
@@ -310,6 +313,26 @@ export default function Resume() {
           )}
         </div>
       )}
+
+      <div className="page-section">
+        <h2 className="section-title">Upload Resume for Placement Review</h2>
+        <p className="muted-text">
+          Keep one current resume with photo and one without photo. Uploading a variant replaces the previous file.
+        </p>
+        <div className="field">
+          <label className="label" htmlFor="resume-variant">Resume version</label>
+          <select id="resume-variant" className="input" value={uploadVariant}
+            onChange={(e) => setUploadVariant(e.target.value as 'photo' | 'no_photo')}>
+            <option value="no_photo">Without photo</option>
+            <option value="photo">With photo</option>
+          </select>
+        </div>
+        <input type="file" accept=".pdf,.docx" className="input"
+          onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)} />
+        <button type="button" className="btn btn-secondary" onClick={handleUpload} disabled={uploading}>
+          {uploading ? 'Uploading...' : 'Upload / Replace Resume'}
+        </button>
+      </div>
 
       {/* ── STEP 2: Profile Warning Modal ──────────────────────── */}
       {step === 'check' && (

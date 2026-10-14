@@ -15,6 +15,7 @@ interface JobRole {
   description: string | null;
   required_skills_json: string | null;
   cgpa_threshold: number | null;
+  minimum_graduation_year: number | null;
   academic_status: string | null;
   is_active: boolean;
   created_at: string | null;
@@ -26,6 +27,7 @@ interface JobForm {
   description: string;
   required_skills: string;
   cgpa_threshold: string;
+  minimum_graduation_year: string;
   academic_status: string;
 }
 
@@ -35,6 +37,7 @@ const emptyForm: JobForm = {
   description: '',
   required_skills: '',
   cgpa_threshold: '0',
+  minimum_graduation_year: '',
   academic_status: '',
 };
 
@@ -101,6 +104,8 @@ export default function JobRoles() {
       description: form.description.trim() || null,
       required_skills: parseSkills(form.required_skills),
       cgpa_threshold: parseFloat(form.cgpa_threshold) || 0,
+      minimum_graduation_year: form.minimum_graduation_year
+        ? Number(form.minimum_graduation_year) : null,
       academic_status: form.academic_status.trim() || null,
     };
 
@@ -144,6 +149,7 @@ export default function JobRoles() {
       description: j.description || '',
       required_skills: skills,
       cgpa_threshold: String(j.cgpa_threshold ?? 0),
+      minimum_graduation_year: String(j.minimum_graduation_year ?? ''),
       academic_status: j.academic_status || '',
     });
     setFormError('');
@@ -248,6 +254,19 @@ export default function JobRoles() {
                 onChange={handleChange}
                 className="input"
                 placeholder="e.g. Final Year"
+              />
+            </label>
+            <label className="label-col">
+              Minimum Graduation Year
+              <input
+                name="minimum_graduation_year"
+                value={form.minimum_graduation_year}
+                onChange={handleChange}
+                className="input"
+                type="number"
+                min="2000"
+                max="2100"
+                placeholder="e.g. 2026"
               />
             </label>
           </div>

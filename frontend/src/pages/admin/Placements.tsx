@@ -52,7 +52,7 @@ export default function Placements() {
                 api.get('/placements'),
                 api.get('/admin/companies'),
                 api.get('/admin/jobs'),
-                api.get('/admin/users', { params: { per_page: 200 } }),
+                api.get('/admin/students'),
             ]);
             if (plRes.status === 'fulfilled') setPlacements(plRes.value.data);
             if (compRes.status === 'fulfilled') setCompanies(compRes.value.data);

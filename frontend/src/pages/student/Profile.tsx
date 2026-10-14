@@ -5,15 +5,20 @@ import { useToast } from '../../components/Toast';
 import { AxiosError } from 'axios';
 
 interface ProjectEntry {
+  id?: number;
   title: string;
   description: string;
   technologies: string;
+  project_url: string;
 }
 
 interface CertificationEntry {
+  id?: number;
   name: string;
   issuer: string;
   issue_date: string;
+  certificate_original_filename?: string | null;
+  certificate_url?: string | null;
 }
 
 interface ProfileData {
@@ -28,6 +33,15 @@ interface ProfileData {
   skills: string[];
   projects: ProjectEntry[];
   certifications: CertificationEntry[];
+  resume_uploads?: ResumeUploadEntry[];
+}
+
+interface ResumeUploadEntry {
+  id: number;
+  original_filename: string;
+  resume_variant: 'photo' | 'no_photo';
+  source: 'uploaded' | 'generated';
+  download_url: string;
 }
 
 interface FieldErrors {
@@ -43,7 +57,7 @@ interface FieldErrors {
 
 type ProfileMode = 'choose' | 'upload' | 'manual' | 'form';
 
-const emptyProject: ProjectEntry = { title: '', description: '', technologies: '' };
+const emptyProject: ProjectEntry = { title: '', description: '', technologies: '', project_url: '' };
 const emptyCert: CertificationEntry = { name: '', issuer: '', issue_date: '' };
 
 export default function Profile() {
@@ -73,6 +87,12 @@ export default function Profile() {
   const [hasExistingProfile, setHasExistingProfile] = useState(false);
   const [photoUrl, setPhotoUrl] = useState('');
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [certificateFiles, setCertificateFiles] = useState<Record<number, File>>({});
+  const [resumeUploads, setResumeUploads] = useState<ResumeUploadEntry[]>([]);
+  const [resumeFiles, setResumeFiles] = useState<Record<'photo' | 'no_photo', File | null>>({
+    photo: null, no_photo: null,
+  });
+  const [resumeVariantUploading, setResumeVariantUploading] = useState<'photo' | 'no_photo' | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -91,7 +111,9 @@ export default function Profile() {
           skills: Array.isArray(d.skills_json) ? d.skills_json : (d.skills_json ? tryParseSkills(d.skills_json) : []),
           projects: Array.isArray(d.projects) ? d.projects : [],
           certifications: Array.isArray(d.certifications) ? d.certifications : [],
+          resume_uploads: Array.isArray(d.resume_uploads) ? d.resume_uploads : [],
         });
+        setResumeUploads(Array.isArray(d.resume_uploads) ? d.resume_uploads : []);
         setHasExistingProfile(true);
         setMode('form'); // Already has profile, go straight to form
       } catch (err) {
@@ -198,7 +220,7 @@ export default function Profile() {
     setSaving(true);
     setErrors({});
     try {
-      await api.put('/profile', {
+      const saved = await api.put('/profile', {
         institution: form.institution,
         degree: form.degree,
         branch: form.branch,
@@ -211,6 +233,23 @@ export default function Profile() {
         projects: form.projects,
         certifications: form.certifications,
       });
+      setForm((previous) => ({
+        ...previous,
+        projects: saved.data.projects ?? previous.projects,
+        certifications: saved.data.certifications ?? previous.certifications,
+      }));
+      setResumeUploads(saved.data.resume_uploads ?? resumeUploads);
+      const savedCertifications = saved.data.certifications ?? [];
+      await Promise.all(Object.entries(certificateFiles).map(async ([index, file]) => {
+        const certification = savedCertifications[Number(index)];
+        if (!certification?.id) return;
+        const data = new FormData();
+        data.append('certificate', file);
+        await api.post(`/profile/certifications/${certification.id}/certificate`, data, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      }));
+      setCertificateFiles({});
       setSuccessMsg('Profile saved successfully!');
       showToast('Profile saved successfully!', 'success');
       setHasExistingProfile(true);
@@ -295,6 +334,30 @@ export default function Profile() {
   const updateProject = (idx: number, field: keyof ProjectEntry, value: string) => {
     const updated = form.projects.map((p, i) => (i === idx ? { ...p, [field]: value } : p));
     setForm({ ...form, projects: updated });
+  };
+
+  const uploadResumeVariant = async (variant: 'photo' | 'no_photo') => {
+    const file = resumeFiles[variant];
+    if (!file) return;
+    setResumeVariantUploading(variant);
+    try {
+      const data = new FormData();
+      data.append('resume', file);
+      data.append('variant', variant);
+      const response = await api.post('/resume/upload', data, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setResumeUploads((previous) => [
+        ...previous.filter((item) => !(item.resume_variant === variant && item.source === 'uploaded')),
+        response.data.upload,
+      ]);
+      setResumeFiles((previous) => ({ ...previous, [variant]: null }));
+      showToast(`${variant === 'photo' ? 'Photo' : 'No-photo'} resume uploaded.`, 'success');
+    } catch (err) {
+      setErrors({ general: err instanceof AxiosError ? err.response?.data?.error?.message ?? 'Resume upload failed.' : 'Resume upload failed.' });
+    } finally {
+      setResumeVariantUploading(null);
+    }
   };
 
   const removeProject = (idx: number) => {
@@ -569,6 +632,12 @@ export default function Profile() {
                 <input type="text" value={proj.technologies}
                   onChange={(e) => updateProject(idx, 'technologies', e.target.value)} className="input" />
               </div>
+              <div className="field">
+                <label className="label">GitHub or Project URL</label>
+                <input type="url" value={proj.project_url ?? ''}
+                  placeholder="https://github.com/you/project"
+                  onChange={(e) => updateProject(idx, 'project_url', e.target.value)} className="input" />
+              </div>
             </div>
           ))}
           <button type="button" onClick={addProject} className="btn btn-primary">+ Add Project</button>
@@ -598,9 +667,51 @@ export default function Profile() {
                 <input type="date" value={cert.issue_date}
                   onChange={(e) => updateCert(idx, 'issue_date', e.target.value)} className="input" />
               </div>
+              <div className="field">
+                <label className="label">Certificate proof (PDF, JPG, PNG, WEBP)</label>
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) setCertificateFiles((previous) => ({ ...previous, [idx]: file }));
+                  }} className="input" />
+                {cert.certificate_original_filename && (
+                  <a href={`${api.defaults.baseURL}${cert.certificate_url}`} target="_blank" rel="noreferrer">
+                    View uploaded certificate
+                  </a>
+                )}
+              </div>
             </div>
           ))}
           <button type="button" onClick={addCertification} className="btn btn-primary">+ Add Certification</button>
+        </div>
+
+        <div className="page-section">
+          <h2 className="section-title">Resume Files</h2>
+          <p className="helper-text">
+            Upload the latest generated or external resume. The selected variant replaces the previous uploaded file.
+          </p>
+          {(['photo', 'no_photo'] as const).map((variant) => {
+            const current = resumeUploads.find((item) => item.resume_variant === variant);
+            return (
+              <div className="entry-card" key={variant}>
+                <strong>{variant === 'photo' ? 'Resume with Photo' : 'Resume without Photo'}</strong>
+                <input type="file" accept=".pdf,.docx" className="input"
+                  onChange={(e) => setResumeFiles((previous) => ({
+                    ...previous, [variant]: e.target.files?.[0] ?? null,
+                  }))} />
+                <button type="button" className="btn btn-secondary"
+                  disabled={resumeVariantUploading === variant || !resumeFiles[variant]}
+                  onClick={() => uploadResumeVariant(variant)}>
+                  {resumeVariantUploading === variant ? 'Uploading...' : 'Upload / Replace'}
+                </button>
+                {current && (
+                  <a href={`${api.defaults.baseURL}${current.download_url}`} target="_blank" rel="noreferrer">
+                    Current: {current.original_filename} ({current.source})
+                  </a>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         <button type="submit" disabled={saving} className="btn btn-success btn-block mt-1">

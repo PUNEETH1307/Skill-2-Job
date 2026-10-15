@@ -11,6 +11,7 @@ import json
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
+from sqlalchemy import or_
 from sqlalchemy.orm import joinedload
 
 from app import db
@@ -96,6 +97,7 @@ class JobMatchingEngine:
             except (json.JSONDecodeError, TypeError):
                 skills = []
 
+        student_skill_index: dict[str, int] = {}
         if skills:
             student_vector = self.skill_analyzer.generate_skill_vector(skills)
         else:
@@ -105,6 +107,7 @@ class JobMatchingEngine:
             if student_vector_data is None:
                 return []
             student_vector = np.array(student_vector_data["vector"], dtype=float)
+            student_skill_index = student_vector_data.get("skill_index", {})
         student_cgpa = profile.cgpa or 0.0
 
         # 2. Get all active job roles
@@ -122,7 +125,13 @@ class JobMatchingEngine:
         for job in job_roles:
             # 3. Check eligibility: CGPA threshold
             threshold = job.cgpa_threshold or 0.0
+            minimum_year = job.minimum_graduation_year
             if student_cgpa < threshold:
+                continue
+            if minimum_year and (
+                profile.graduation_year is None
+                or profile.graduation_year < minimum_year
+            ):
                 continue
 
             # Parse job vector
@@ -148,8 +157,34 @@ class JobMatchingEngine:
                     continue
                 job_vector = np.array(job_vector_data["vector"], dtype=float)
 
-            # 4. Compute compatibility score
-            score = self.compute_compatibility(student_vector, job_vector)
+            # 4. Compute compatibility score from the same required-skill
+            # comparison shown to the student. This prevents unrelated
+            # profile skills from lowering a full-coverage result.
+            comparable_student_skills = list(skills)
+            if not comparable_student_skills and student_skill_index:
+                comparable_student_skills = [
+                    skill_name
+                    for skill_name, skill_index in student_skill_index.items()
+                    if skill_index < len(student_vector)
+                    and student_vector[skill_index] > 0
+                ]
+            normalized_student_skills = {
+                self.skill_analyzer.normalize_skill(skill).lower()
+                for skill in comparable_student_skills
+            }
+            normalized_required_skills = [
+                self.skill_analyzer.normalize_skill(skill).lower()
+                for skill in required_skills
+            ]
+            matched_skill_count = sum(
+                skill in normalized_student_skills
+                for skill in normalized_required_skills
+            )
+            score = (
+                matched_skill_count / len(normalized_required_skills)
+                if normalized_required_skills
+                else self.compute_compatibility(student_vector, job_vector)
+            )
 
             # Get company name
             company = db.session.get(Company, job.company_id)
@@ -162,6 +197,16 @@ class JobMatchingEngine:
                 "company_name": company_name,
                 "compatibility_score": round(score * 100, 1),
                 "required_skills": required_skills,
+                "matched_skills": [
+                    skill for skill in required_skills
+                    if self.skill_analyzer.normalize_skill(skill).lower()
+                    in normalized_student_skills
+                ],
+                "missing_skills": [
+                    skill for skill in required_skills
+                    if self.skill_analyzer.normalize_skill(skill).lower()
+                    not in normalized_student_skills
+                ],
             })
 
         # 5. Sort descending by score
@@ -269,26 +314,36 @@ class JobMatchingEngine:
             job_skill_index = job_vector_data.get("skill_index", {})
 
         threshold = job.cgpa_threshold or 0.0
+        minimum_year = job.minimum_graduation_year
         job_norm = float(np.linalg.norm(job_vector))
 
         # Build a set of required skill names (lowercase) for matching
         required_skills_lower = {s.lower() for s in required_skills_list}
+        canonical_skill_index = {
+            skill.canonical_name.lower(): index
+            for index, skill in enumerate(taxonomy)
+        }
 
         # 2. Get all student profiles with skill vectors
-        profiles = StudentProfile.query.options(
+        profile_query = StudentProfile.query.options(
             joinedload(StudentProfile.user)
-        ).all()
+        ).filter(StudentProfile.missed_drive_blocks <= 0)
+        if threshold > 0:
+            profile_query = profile_query.filter(StudentProfile.cgpa >= threshold)
+        else:
+            profile_query = profile_query.filter(
+                or_(StudentProfile.cgpa >= threshold, StudentProfile.cgpa.is_(None))
+            )
+        if minimum_year:
+            profile_query = profile_query.filter(
+                StudentProfile.graduation_year >= minimum_year
+            )
+        profiles = profile_query.all()
 
         candidates: list[dict] = []
 
         for profile in profiles:
-            # A missed registration blocks the student from the next two drives.
-            if profile.missed_drive_blocks > 0:
-                continue
-            # 3. Filter by CGPA eligibility
             student_cgpa = profile.cgpa or 0.0
-            if student_cgpa < threshold:
-                continue
 
             student_skills: list[str] = []
             if profile.skills_json:
@@ -307,10 +362,7 @@ class JobMatchingEngine:
                 student_vector = self._vector_from_skills(
                     student_skills, skill_lookup, len(taxonomy)
                 )
-                student_skill_index = {
-                    skill.canonical_name.lower(): index
-                    for index, skill in enumerate(taxonomy)
-                }
+                student_skill_index = canonical_skill_index
             else:
                 student_vector_data = self._parse_vector_json(profile.skill_vector_json)
                 if student_vector_data is None:
@@ -322,21 +374,35 @@ class JobMatchingEngine:
 
             # 4. Compute compatibility score
             student_norm = float(np.linalg.norm(student_vector))
-            dot_product = float(np.dot(student_vector, job_vector))
-            score = (
-                dot_product / (student_norm * job_norm)
-                if student_norm and job_norm else 0.0
-            )
+            if student_vector.shape != job_vector.shape:
+                # Saved vectors can belong to an older taxonomy. Do not let
+                # a stale vector abort the complete shortlist request.
+                score = 0.0
+            else:
+                dot_product = float(np.dot(student_vector, job_vector))
+                score = (
+                    dot_product / (student_norm * job_norm)
+                    if student_norm and job_norm else 0.0
+                )
 
             # Determine matched and missing skills
             # Build set of student skills (those with vector value > 0)
-            student_skills_lower: set[str] = set()
+            student_skills_lower: set[str] = {
+                self.skill_analyzer.normalize_skill(skill).lower()
+                for skill in student_skills
+            }
             for skill_name, idx in student_skill_index.items():
                 if idx < len(student_vector) and student_vector[idx] > 0:
                     student_skills_lower.add(skill_name.lower())
 
-            matched = [s for s in required_skills_list if s.lower() in student_skills_lower]
-            missing = [s for s in required_skills_list if s.lower() not in student_skills_lower]
+            matched = [
+                s for s in required_skills_list
+                if self.skill_analyzer.normalize_skill(s).lower() in student_skills_lower
+            ]
+            missing = [
+                s for s in required_skills_list
+                if self.skill_analyzer.normalize_skill(s).lower() not in student_skills_lower
+            ]
 
             # Get student name from User
             name = profile.user.name if profile.user else "Unknown"

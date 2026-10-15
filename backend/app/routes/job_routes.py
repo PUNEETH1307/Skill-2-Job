@@ -9,7 +9,6 @@ Requirements: 6.1, 6.3, 6.4, 6.5, 7.1, 7.3, 7.4, 8.1, 8.2, 8.3
 import json
 import logging
 
-import numpy as np
 from flask import Blueprint, jsonify, g, request
 
 from app import db
@@ -31,6 +30,46 @@ _recommendations_cache: dict[int, list[dict]] = {}
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
+
+def _current_skill_comparison(profile, job_role):
+    """Compare current profile skills with current job requirements."""
+    profile_skills = []
+    if profile.skills_json:
+        try:
+            parsed = json.loads(profile.skills_json)
+            if isinstance(parsed, list):
+                profile_skills = [
+                    str(skill).strip() for skill in parsed if str(skill).strip()
+                ]
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    required_skills = []
+    if job_role.required_skills_json:
+        try:
+            parsed = json.loads(job_role.required_skills_json)
+            if isinstance(parsed, list):
+                required_skills = [
+                    str(skill).strip() for skill in parsed if str(skill).strip()
+                ]
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    analyzer = SkillAnalyzer()
+    student_skills = {
+        analyzer.normalize_skill(skill).lower() for skill in profile_skills
+    }
+    matched = [
+        skill for skill in required_skills
+        if analyzer.normalize_skill(skill).lower() in student_skills
+    ]
+    missing = [
+        skill for skill in required_skills
+        if analyzer.normalize_skill(skill).lower() not in student_skills
+    ]
+    gaps = [{"skill": skill, "deficit_score": 1.0} for skill in missing]
+    return required_skills, matched, missing, gaps
 
 
 @job_bp.route("/options", methods=["GET"])
@@ -180,6 +219,16 @@ def get_recommendations():
     try:
         engine = JobMatchingEngine()
         recommendations = engine.get_recommendations(user_id)
+        profile = StudentProfile.query.filter_by(user_id=user_id).first()
+        if profile:
+            for recommendation in recommendations:
+                job_role = db.session.get(JobRole, recommendation["job_role_id"])
+                if job_role:
+                    _, matched, missing, _ = _current_skill_comparison(
+                        profile, job_role
+                    )
+                    recommendation["matched_skills"] = matched
+                    recommendation["missing_skills"] = missing
         # Cache successful results for graceful degradation
         _recommendations_cache[user_id] = recommendations
         return jsonify(recommendations), 200
@@ -226,7 +275,7 @@ def get_skill_gap(id):
 
     # Fetch student profile
     profile = StudentProfile.query.filter_by(user_id=user_id).first()
-    if profile is None or not profile.skill_vector_json:
+    if profile is None:
         return (
             jsonify(
                 {
@@ -256,53 +305,22 @@ def get_skill_gap(id):
             404,
         )
 
-    if not job_role.job_vector_json:
-        return (
-            jsonify(
-                {
-                    "error": {
-                        "code": "PROCESSING_ERROR",
-                        "message": "Job role has no skill vector",
-                        "fields": {},
-                    }
-                }
-            ),
-            500,
-        )
-
-    # Parse vectors
-    try:
-        student_data = json.loads(profile.skill_vector_json)
-        job_data = json.loads(job_role.job_vector_json)
-    except (json.JSONDecodeError, TypeError):
-        return (
-            jsonify(
-                {
-                    "error": {
-                        "code": "PROCESSING_ERROR",
-                        "message": "Failed to parse skill vectors",
-                        "fields": {},
-                    }
-                }
-            ),
-            500,
-        )
-
-    student_vector = np.array(student_data.get("vector", []), dtype=float)
-    job_vector = np.array(job_data.get("vector", []), dtype=float)
-    skill_index = job_data.get("skill_index", {})
-
-    # Compute skill gap
-    engine = JobMatchingEngine()
-    gaps = engine.compute_skill_gap(student_vector, job_vector, skill_index)
+    _, matched, missing, gaps = _current_skill_comparison(profile, job_role)
 
     if not gaps:
-        return jsonify({"message": "Full skill coverage"}), 200
+        return jsonify({
+            "job_role_id": id,
+            "matched_skills": matched,
+            "missing_skills": [],
+            "message": "Full skill coverage",
+        }), 200
 
     return (
         jsonify(
             {
                 "job_role_id": id,
+                "matched_skills": matched,
+                "missing_skills": missing,
                 "gaps": gaps,
             }
         ),
@@ -330,7 +348,7 @@ def get_courses(id):
 
     # Fetch student profile
     profile = StudentProfile.query.filter_by(user_id=user_id).first()
-    if profile is None or not profile.skill_vector_json:
+    if profile is None:
         return (
             jsonify(
                 {
@@ -360,45 +378,7 @@ def get_courses(id):
             404,
         )
 
-    if not job_role.job_vector_json:
-        return (
-            jsonify(
-                {
-                    "error": {
-                        "code": "PROCESSING_ERROR",
-                        "message": "Job role has no skill vector",
-                        "fields": {},
-                    }
-                }
-            ),
-            500,
-        )
-
-    # Parse vectors
-    try:
-        student_data = json.loads(profile.skill_vector_json)
-        job_data = json.loads(job_role.job_vector_json)
-    except (json.JSONDecodeError, TypeError):
-        return (
-            jsonify(
-                {
-                    "error": {
-                        "code": "PROCESSING_ERROR",
-                        "message": "Failed to parse skill vectors",
-                        "fields": {},
-                    }
-                }
-            ),
-            500,
-        )
-
-    student_vector = np.array(student_data.get("vector", []), dtype=float)
-    job_vector = np.array(job_data.get("vector", []), dtype=float)
-    skill_index = job_data.get("skill_index", {})
-
-    # Compute skill gap
-    engine = JobMatchingEngine()
-    gaps = engine.compute_skill_gap(student_vector, job_vector, skill_index)
+    _, matched, missing, gaps = _current_skill_comparison(profile, job_role)
 
     # For each gap skill, query CourseRecommendation table
     courses_by_skill = []
@@ -430,6 +410,8 @@ def get_courses(id):
         jsonify(
             {
                 "job_role_id": id,
+                "matched_skills": matched,
+                "missing_skills": missing,
                 "skill_courses": courses_by_skill,
             }
         ),

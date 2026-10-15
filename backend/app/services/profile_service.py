@@ -142,6 +142,7 @@ def create_or_update_profile(user_id: int, data: dict) -> dict:
                 title=proj_data.get("title", ""),
                 description=proj_data.get("description"),
                 technologies=proj_data.get("technologies"),
+                project_url=proj_data.get("project_url"),
             )
             db.session.add(project)
 

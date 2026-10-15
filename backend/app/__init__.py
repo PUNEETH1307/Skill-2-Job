@@ -4,6 +4,7 @@ from flask import Flask, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS
+from sqlalchemy import inspect, text
 
 from config import config_by_name
 
@@ -54,6 +55,20 @@ def create_app(config_name='default'):
 
     # Import models so SQLAlchemy registers them for migrations and create_all
     from app import models  # noqa: F401
+
+    # Keep existing development databases usable after adding shortlist names.
+    # Fresh databases get the column from the model via create_all().
+    with app.app_context():
+        if "shortlist" in inspect(db.engine).get_table_names():
+            columns = {
+                column["name"]
+                for column in inspect(db.engine).get_columns("shortlist")
+            }
+            if "shortlist_name" not in columns:
+                with db.engine.begin() as connection:
+                    connection.execute(
+                        text("ALTER TABLE shortlist ADD COLUMN shortlist_name VARCHAR(150)")
+                    )
 
     # Register blueprints
     from app.routes.auth_routes import auth_bp

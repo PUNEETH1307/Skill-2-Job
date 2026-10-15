@@ -298,6 +298,16 @@ class TestGenerateResume:
         assert isinstance(pdf_bytes, bytes)
         assert pdf_bytes[:5] == b"%PDF-"
 
+    @pytest.mark.parametrize("template_id", ["executive", "photo_card"])
+    def test_photo_templates_generate_pdf(self, app, db_session, template_id):
+        user = _create_user(db_session)
+        _create_full_profile(db_session, user)
+
+        pdf_bytes = ResumeGenerator().generate_resume(user.id, template_id=template_id)
+
+        assert pdf_bytes[:5] == b"%PDF-"
+        assert len(pdf_bytes) > 100
+
 
 # -----------------------------------------------------------------------
 # get_download_filename

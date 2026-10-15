@@ -13,7 +13,8 @@ import json
 from datetime import date, datetime
 
 import bcrypt
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
+from sqlalchemy.orm import joinedload
 
 from app import db
 from app.models import (
@@ -26,6 +27,7 @@ from app.models import (
     UncategorizedSkill,
     CourseRecommendation,
     PlacementRecord,
+    Notification,
 )
 from app.services.skill_analyzer import SkillAnalyzer
 from app.services.job_matching import JobMatchingEngine
@@ -33,6 +35,19 @@ from app.services.analytics_service import AnalyticsService
 from app.utils.auth_decorator import jwt_required, role_required
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
+
+
+@admin_bp.route("/students/<int:student_id>/profile", methods=["GET"])
+@jwt_required
+@role_required("placement_officer")
+def get_student_profile(student_id):
+    """Return a complete student profile for placement review."""
+    profile = db.session.get(StudentProfile, student_id)
+    if profile is None:
+        return jsonify({"error": {"code": "NOT_FOUND", "message": "Student profile not found"}}), 404
+    data = profile.to_dict()
+    data["student"] = profile.user.to_dict() if profile.user else None
+    return jsonify(data), 200
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +227,64 @@ def list_jobs():
     return jsonify(result), 200
 
 
+@admin_bp.route("/custom-job", methods=["POST"])
+@jwt_required
+@role_required("placement_officer")
+def create_custom_job():
+    """Create a persistent startup/custom role for matching and placement workflows."""
+    data = request.get_json(silent=True) or {}
+    company_name = str(data.get("company_name", "")).strip()
+    title = str(data.get("title", "")).strip()
+    skills = data.get("required_skills", [])
+    if isinstance(skills, str):
+        skills = [skill.strip() for skill in skills.split(",") if skill.strip()]
+    skills = [str(skill).strip() for skill in skills if str(skill).strip()]
+
+    errors = {}
+    if not company_name:
+        errors["company_name"] = "Company name is required"
+    if not title:
+        errors["title"] = "Job title is required"
+    if not skills:
+        errors["required_skills"] = "At least one required skill is needed"
+    if errors:
+        return jsonify({"error": {"code": "VALIDATION_ERROR", "message": "Invalid custom role", "fields": errors}}), 400
+
+    company = Company.query.filter(db.func.lower(Company.name) == company_name.lower()).first()
+    if company is None:
+        company = Company(name=company_name, is_active=True)
+        db.session.add(company)
+        db.session.flush()
+
+    analyzer = SkillAnalyzer()
+    vector = analyzer.generate_job_requirement_vector(skills)
+    taxonomy = SkillTaxonomy.query.filter_by(is_deprecated=False).order_by(SkillTaxonomy.id).all()
+    vector_data = {
+        "vector": vector.tolist(),
+        "skill_index": {skill.canonical_name.lower(): index for index, skill in enumerate(taxonomy)},
+        "version": "1.0",
+    }
+    job_role = JobRole(
+        company_id=company.id,
+        title=title,
+        description=data.get("description"),
+        required_skills_json=json.dumps(skills),
+        job_vector_json=json.dumps(vector_data),
+        cgpa_threshold=float(data.get("cgpa_threshold") or 0),
+        minimum_graduation_year=(
+            int(data["minimum_graduation_year"])
+            if data.get("minimum_graduation_year") else None
+        ),
+        academic_status=data.get("academic_status"),
+        is_active=True,
+    )
+    db.session.add(job_role)
+    db.session.commit()
+    result = job_role.to_dict()
+    result["company_name"] = company.name
+    return jsonify(result), 201
+
+
 @admin_bp.route("/jobs", methods=["POST"])
 @jwt_required
 @role_required("placement_officer")
@@ -323,6 +396,10 @@ def create_job():
         required_skills_json=json.dumps(required_skills) if required_skills else None,
         job_vector_json=job_vector_json,
         cgpa_threshold=json_data.get("cgpa_threshold", 0.0),
+        minimum_graduation_year=(
+            int(json_data["minimum_graduation_year"])
+            if json_data.get("minimum_graduation_year") else None
+        ),
         academic_status=json_data.get("academic_status"),
         is_active=True,
     )
@@ -397,6 +474,16 @@ def update_job(id):
         job_role.description = json_data["description"]
     if "cgpa_threshold" in json_data:
         job_role.cgpa_threshold = json_data["cgpa_threshold"]
+    if "minimum_graduation_year" in json_data:
+        value = json_data["minimum_graduation_year"]
+        try:
+            job_role.minimum_graduation_year = int(value) if value not in (None, "") else None
+        except (TypeError, ValueError):
+            return jsonify({"error": {
+                "code": "VALIDATION_ERROR",
+                "message": "minimum_graduation_year must be a valid year",
+                "fields": {"minimum_graduation_year": "Enter a valid graduation year"},
+            }}), 400
     if "academic_status" in json_data:
         job_role.academic_status = json_data["academic_status"]
     if "is_active" in json_data:
@@ -589,31 +676,51 @@ def create_shortlist(id):
             400,
         )
 
+    shortlist_name = str(json_data.get("shortlist_name") or "").strip()
+    if not shortlist_name:
+        shortlist_name = f"Shortlist - {job_role.title}"
+    if len(shortlist_name) > 150:
+        return jsonify({"error": {
+            "code": "VALIDATION_ERROR",
+            "message": "Shortlist name must be 150 characters or fewer",
+            "fields": {"shortlist_name": "Shortlist name is too long"},
+        }}), 400
+
+    try:
+        requested_ids = {int(profile_id) for profile_id in profile_ids}
+    except (TypeError, ValueError):
+        return jsonify({"error": {
+            "code": "VALIDATION_ERROR",
+            "message": "profile_ids must contain valid student profile IDs",
+            "fields": {"profile_ids": "Every profile ID must be an integer"},
+        }}), 400
+
     # Compute compatibility scores for all candidates to look up scores
     engine = JobMatchingEngine()
     candidates = engine.shortlist_candidates(id)
     score_map = {c["profile_id"]: c["compatibility_score"] for c in candidates}
 
+    profiles = StudentProfile.query.options(
+        joinedload(StudentProfile.user)
+    ).filter(StudentProfile.id.in_(requested_ids)).all()
+    existing_ids = {
+        profile_id
+        for (profile_id,) in db.session.query(Shortlist.profile_id).filter(
+            Shortlist.job_role_id == id,
+            Shortlist.profile_id.in_(requested_ids),
+        ).all()
+    }
+
     created_records = []
-    for profile_id in profile_ids:
-        # Verify the profile exists
-        profile = db.session.get(StudentProfile, profile_id)
-        if profile is None:
+    for profile in profiles:
+        if profile.id in existing_ids:
             continue
-
-        # Avoid duplicate shortlist entries
-        existing = Shortlist.query.filter_by(
-            profile_id=profile_id, job_role_id=id
-        ).first()
-        if existing:
-            continue
-
-        compatibility_score = score_map.get(profile_id, 0.0)
 
         shortlist_record = Shortlist(
-            profile_id=profile_id,
+            profile_id=profile.id,
             job_role_id=id,
-            compatibility_score=compatibility_score,
+            shortlist_name=shortlist_name,
+            compatibility_score=score_map.get(profile.id, 0.0),
             status="Shortlisted",
         )
         db.session.add(shortlist_record)
@@ -621,25 +728,86 @@ def create_shortlist(id):
 
     db.session.commit()
 
+    if created_records:
+        candidate_map = {candidate["profile_id"]: candidate for candidate in candidates}
+        missing = sorted({
+            skill
+            for record in created_records
+            for skill in candidate_map.get(record.profile_id, {}).get("missing_skills", [])
+        })
+        skill_message = (
+            f"Matched skills are shown in your shortlist details. "
+            f"Skill gaps to improve: {', '.join(missing)}. "
+            f"Open /student/jobs/{id}/gap for gap analysis and course recommendations."
+            if missing else
+            f"Your matched skills are available in the shortlist details. "
+            f"Open /student/jobs/{id}/gap for skill-gap analysis and courses."
+        )
+        db.session.add(Notification(
+            title=f"Shortlisted for {job_role.title}",
+            message=skill_message,
+            target_audience="shortlisted",
+            sent_by=g.current_user["user_id"],
+        ))
+        db.session.commit()
+
     # Send email notifications to shortlisted students
     from app.services.email_service import get_email_service
     email_svc = get_email_service()
+    profile_map = {profile.id: profile for profile in profiles}
+    company = db.session.get(Company, job_role.company_id) if job_role.company_id else None
     for record in created_records:
         try:
-            profile = db.session.get(StudentProfile, record.profile_id)
+            profile = profile_map.get(record.profile_id)
             if profile:
-                user = db.session.get(User, profile.user_id)
+                user = profile.user
                 if user and user.email:
                     email_svc.send_shortlist_notification(
                         to_email=user.email,
                         user_name=user.name,
                         job_title=job_role.title,
-                        company_name=db.session.get(Company, job_role.company_id).name if job_role.company_id else "Unknown",
+                        company_name=company.name if company else "Unknown",
                     )
         except Exception:
             pass  # Don't fail shortlisting if email fails
 
     return jsonify([r.to_dict() for r in created_records]), 201
+
+
+@admin_bp.route("/shortlists", methods=["GET"])
+@jwt_required
+@role_required("placement_officer")
+def list_named_shortlists():
+    """List saved named shortlists with their student names."""
+    job_role_id = request.args.get("job_role_id", type=int)
+    query = Shortlist.query.options(
+        joinedload(Shortlist.profile).joinedload(StudentProfile.user),
+        joinedload(Shortlist.job_role),
+    )
+    if job_role_id:
+        query = query.filter(Shortlist.job_role_id == job_role_id)
+
+    groups = {}
+    for record in query.order_by(Shortlist.shortlisted_at.desc()).all():
+        name = record.shortlist_name or (
+            f"Shortlist - {record.job_role.title}"
+            if record.job_role else "Saved shortlist"
+        )
+        group = groups.setdefault(name, {
+            "name": name,
+            "job_role_id": record.job_role_id,
+            "job_title": record.job_role.title if record.job_role else None,
+            "students": [],
+        })
+        group["students"].append({
+            "profile_id": record.profile_id,
+            "name": record.profile.user.name if record.profile and record.profile.user else "Unknown",
+            "cgpa": record.profile.cgpa if record.profile else None,
+            "score": record.compatibility_score,
+            "status": record.status,
+        })
+
+    return jsonify(list(groups.values())), 200
 
 
 # ---------------------------------------------------------------------------
@@ -718,6 +886,24 @@ def get_analytics():
 # ---------------------------------------------------------------------------
 # User management routes (Task 10.4)
 # ---------------------------------------------------------------------------
+
+
+@admin_bp.route("/students", methods=["GET"])
+@jwt_required
+@role_required("placement_officer")
+def list_student_users():
+    """Return the minimal student list needed by placement workflows."""
+    students = (
+        User.query
+        .with_entities(User.id, User.name)
+        .filter(User.role == "student", User.status == "active")
+        .order_by(User.name)
+        .all()
+    )
+    return jsonify({
+        "users": [{"id": user_id, "name": name, "role": "student"} for user_id, name in students],
+        "total": len(students),
+    }), 200
 
 
 @admin_bp.route("/users", methods=["GET"])

@@ -5,6 +5,7 @@ including nested projects, certifications, and skill data.
 """
 
 import os
+from datetime import datetime, timezone
 
 from flask import Blueprint, request, jsonify, g, current_app, send_from_directory
 from werkzeug.utils import secure_filename
@@ -156,3 +157,68 @@ def get_profile_photo():
     if not profile or not profile.photo_filename:
         return jsonify({"error": {"code": "NOT_FOUND", "message": "Profile photo not found"}}), 404
     return send_from_directory(current_app.config.get("UPLOAD_FOLDER"), profile.photo_filename)
+
+
+@profile_bp.route("/profile/certifications/<int:certification_id>/certificate", methods=["POST"])
+@jwt_required
+@role_required("student")
+def upload_certificate(certification_id):
+    """Upload or replace proof for one certification."""
+    from app import db
+    from app.models import Certification, StudentProfile
+
+    certification = db.session.get(Certification, certification_id)
+    profile = StudentProfile.query.filter_by(user_id=g.current_user["user_id"]).first()
+    if certification is None or profile is None or certification.profile_id != profile.id:
+        return jsonify({"error": {"code": "NOT_FOUND", "message": "Certification not found"}}), 404
+
+    certificate = request.files.get("certificate")
+    if not certificate or not certificate.filename:
+        return jsonify({"error": {"code": "VALIDATION_ERROR", "message": "Please select a certificate"}}), 400
+
+    filename = secure_filename(certificate.filename)
+    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    allowed = current_app.config.get("ALLOWED_CERTIFICATE_EXTENSIONS", set())
+    if extension not in allowed:
+        return jsonify({
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Only PDF, JPG, PNG, and WEBP certificates are allowed",
+            }
+        }), 400
+
+    upload_folder = current_app.config["UPLOAD_FOLDER"]
+    certificate_folder = os.path.join(upload_folder, "certificates")
+    os.makedirs(certificate_folder, exist_ok=True)
+    stored_filename = f"{profile.user_id}_{certification.id}_{filename}"
+    certificate.save(os.path.join(certificate_folder, stored_filename))
+    certification.certificate_original_filename = filename
+    certification.certificate_stored_filename = stored_filename
+    certification.certificate_content_type = certificate.content_type or "application/octet-stream"
+    certification.certificate_uploaded_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify(certification.to_dict()), 200
+
+
+@profile_bp.route("/profile/certifications/<int:certification_id>/certificate", methods=["GET"])
+@jwt_required
+def download_certificate(certification_id):
+    """Serve a certificate to its owner or a placement officer/admin."""
+    from app import db
+    from app.models import Certification
+
+    certification = db.session.get(Certification, certification_id)
+    current_user = g.current_user
+    if certification is None or not certification.certificate_stored_filename:
+        return jsonify({"error": {"code": "NOT_FOUND", "message": "Certificate not found"}}), 404
+    if current_user["role"] == "student" and certification.profile.user_id != current_user["user_id"]:
+        return jsonify({"error": {"code": "FORBIDDEN", "message": "Access denied"}}), 403
+    if current_user["role"] not in {"student", "placement_officer", "admin"}:
+        return jsonify({"error": {"code": "FORBIDDEN", "message": "Access denied"}}), 403
+    return send_from_directory(
+        os.path.join(current_app.config["UPLOAD_FOLDER"], "certificates"),
+        certification.certificate_stored_filename,
+        as_attachment=False,
+        download_name=certification.certificate_original_filename,
+        mimetype=certification.certificate_content_type,
+    )

@@ -14,6 +14,7 @@ class Config:
     )
     MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10 MB upload limit
     ALLOWED_RESUME_EXTENSIONS = {'pdf', 'docx'}
+    ALLOWED_CERTIFICATE_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png', 'webp'}
 
 
 class DevelopmentConfig(Config):

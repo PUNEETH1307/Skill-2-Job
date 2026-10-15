@@ -160,11 +160,24 @@ def parse_resume_for_profile():
         db.session.commit()
 
     # Save upload record
+    previous_uploads = ResumeUpload.query.filter_by(
+        profile_id=profile.id, resume_variant=request.form.get("variant", "no_photo"),
+        source="uploaded",
+    ).all()
+    upload_folder = current_app.config.get('UPLOAD_FOLDER')
+    for previous in previous_uploads:
+        previous_path = os.path.join(upload_folder, previous.stored_filename)
+        if os.path.exists(previous_path):
+            os.remove(previous_path)
+        db.session.delete(previous)
+
     resume_record = ResumeUpload(
         profile_id=profile.id,
         original_filename=filename,
         stored_filename=stored_filename,
         content_type=file.content_type or 'application/octet-stream',
+        resume_variant=request.form.get("variant", "no_photo"),
+        source="uploaded",
     )
     db.session.add(resume_record)
     db.session.commit()
@@ -250,11 +263,29 @@ def upload_resume():
     file_path = os.path.join(upload_folder, stored_filename)
     file.save(file_path)
 
+    variant = request.form.get("variant", "no_photo")
+    if variant not in {"photo", "no_photo"}:
+        os.remove(file_path)
+        return jsonify({
+            "error": {"code": "VALIDATION_ERROR", "message": "variant must be photo or no_photo"}
+        }), 400
+
+    previous_uploads = ResumeUpload.query.filter_by(
+        profile_id=profile.id, resume_variant=variant, source="uploaded"
+    ).all()
+    for previous in previous_uploads:
+        previous_path = os.path.join(upload_folder, previous.stored_filename)
+        if os.path.exists(previous_path):
+            os.remove(previous_path)
+        db.session.delete(previous)
+
     resume_record = ResumeUpload(
         profile_id=profile.id,
         original_filename=filename,
         stored_filename=stored_filename,
         content_type=file.content_type or 'application/octet-stream',
+        resume_variant=variant,
+        source="uploaded",
     )
     db.session.add(resume_record)
     db.session.commit()
@@ -370,6 +401,28 @@ def generate_resume():
         generated_path = _generated_resume_path(current_app.config.get('UPLOAD_FOLDER'), user_id, template_id)
         with open(generated_path, 'wb') as pdf_file:
             pdf_file.write(pdf_bytes)
+
+        if profile is not None:
+            from app.models import ResumeUpload
+            upload_folder = current_app.config.get("UPLOAD_FOLDER")
+            variant = "photo" if template_id in {"sidebar", "executive", "photo_card"} else "no_photo"
+            generated_record = ResumeUpload.query.filter_by(
+                profile_id=profile.id, resume_variant=variant, source="generated"
+            ).first()
+            relative_path = os.path.relpath(generated_path, upload_folder)
+            if generated_record is None:
+                db.session.add(ResumeUpload(
+                    profile_id=profile.id,
+                    original_filename=filename,
+                    stored_filename=relative_path,
+                    content_type="application/pdf",
+                    resume_variant=variant,
+                    source="generated",
+                ))
+            else:
+                generated_record.original_filename = filename
+                generated_record.stored_filename = relative_path
+            db.session.commit()
 
         return jsonify({
             "message": "Resume generated successfully",

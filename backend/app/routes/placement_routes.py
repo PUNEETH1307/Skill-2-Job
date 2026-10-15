@@ -7,6 +7,7 @@ and updating placement details. Accessible by placement officers and admins.
 from datetime import date as date_type, datetime, timezone
 
 from flask import Blueprint, g, jsonify, request
+from sqlalchemy.orm import joinedload
 
 from app import db
 from app.models import (
@@ -29,7 +30,9 @@ def list_student_drives():
     _finalize_missed_drives(profile)
     registrations = {item.drive_id: item for item in DriveRegistration.query.filter_by(profile_id=profile.id).all()}
     drives = []
-    for drive in PlacementDrive.query.filter(PlacementDrive.status == "open").order_by(PlacementDrive.drive_date.asc()).all():
+    for drive in PlacementDrive.query.filter(
+        PlacementDrive.status == "open"
+    ).order_by(PlacementDrive.drive_date.desc()).all():
         item = drive.to_dict()
         item["registration"] = registrations.get(drive.id).to_dict() if registrations.get(drive.id) else None
         item["blocked"] = profile.missed_drive_blocks > 0
@@ -212,7 +215,37 @@ def manage_drive_shortlist(drive_id):
     if request.method == "GET":
         eligible = StudentProfile.query.all()
         current = {item.profile_id: item for item in drive.shortlists}
-        return jsonify({"eligible_candidates": [{"profile_id": p.id, "student_name": p.user.name, "cgpa": p.cgpa, "graduation_year": p.graduation_year, "backlogs_count": p.backlogs_count, "eligible": _drive_eligibility(p, drive)[0], "eligibility_reasons": _drive_eligibility(p, drive)[1], "shortlisted": p.id in current} for p in eligible], "shortlisted": [item.to_dict() for item in drive.shortlists]}), 200
+        registrations = {
+            item.profile_id: item
+            for item in DriveRegistration.query.filter_by(drive_id=drive_id).all()
+        }
+        return jsonify({
+            "eligible_candidates": [
+                {
+                    "profile_id": p.id,
+                    "student_name": p.user.name,
+                    "cgpa": p.cgpa,
+                    "graduation_year": p.graduation_year,
+                    "backlogs_count": p.backlogs_count,
+                    "eligible": _drive_eligibility(p, drive)[0],
+                    "eligibility_reasons": _drive_eligibility(p, drive)[1],
+                    "registered": p.id in registrations,
+                    "registration_status": (
+                        registrations[p.id].status if p.id in registrations else None
+                    ),
+                    "attended": (
+                        registrations[p.id].attended if p.id in registrations else False
+                    ),
+                    "shortlisted": p.id in current,
+                }
+                for p in eligible
+            ],
+            "shortlisted": [item.to_dict() for item in drive.shortlists],
+            "registered": [
+                item.to_dict()
+                for item in registrations.values()
+            ],
+        }), 200
     data = request.get_json(silent=True) or {}
     profile_id = data.get("profile_id")
     item = DriveShortlist.query.filter_by(drive_id=drive_id, profile_id=profile_id).first()
@@ -227,6 +260,38 @@ def manage_drive_shortlist(drive_id):
         item = DriveShortlist(drive_id=drive_id, profile_id=profile_id, status="shortlisted")
         db.session.add(item); db.session.commit()
     return jsonify(item.to_dict()), 201
+
+
+@placement_bp.route(
+    "/drive-management/<int:drive_id>/registrations/<int:profile_id>",
+    methods=["DELETE"],
+)
+@jwt_required
+@role_required("placement_officer")
+def remove_drive_registration(drive_id, profile_id):
+    """Remove a student's registration and related shortlist entry."""
+    registration = DriveRegistration.query.filter_by(
+        drive_id=drive_id,
+        profile_id=profile_id,
+    ).first()
+    if registration is None:
+        return jsonify({
+            "error": {
+                "code": "NOT_FOUND",
+                "message": "Student registration not found.",
+                "fields": {},
+            }
+        }), 404
+
+    shortlist_item = DriveShortlist.query.filter_by(
+        drive_id=drive_id,
+        profile_id=profile_id,
+    ).first()
+    if shortlist_item:
+        db.session.delete(shortlist_item)
+    db.session.delete(registration)
+    db.session.commit()
+    return jsonify({"message": "Student registration removed"}), 200
 
 
 @placement_bp.route("/drives/<int:job_role_id>/missed/<int:profile_id>", methods=["POST"])
@@ -304,7 +369,11 @@ def list_placements():
             db.extract("year", PlacementRecord.placement_date) == year
         )
 
-    records = query.order_by(PlacementRecord.placement_date.desc()).all()
+    records = query.options(
+        joinedload(PlacementRecord.profile).joinedload(StudentProfile.user),
+        joinedload(PlacementRecord.job_role),
+        joinedload(PlacementRecord.company),
+    ).order_by(PlacementRecord.placement_date.desc()).all()
     return jsonify([r.to_dict() for r in records]), 200
 
 

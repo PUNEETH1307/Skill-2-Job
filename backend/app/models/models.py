@@ -125,6 +125,7 @@ class StudentProfile(db.Model):
             "certifications": [c.to_dict() for c in self.certifications],
             "missed_drive_blocks": self.missed_drive_blocks,
             "dream_jobs": [d.to_dict() for d in self.dream_jobs],
+            "resume_uploads": [r.to_dict() for r in self.resume_uploads],
         }
 
 
@@ -142,6 +143,7 @@ class Project(db.Model):
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text, nullable=True)
     technologies = db.Column(db.String(500), nullable=True)
+    project_url = db.Column(db.String(1000), nullable=True)
 
     # Relationships
     profile = db.relationship("StudentProfile", back_populates="projects")
@@ -156,6 +158,7 @@ class Project(db.Model):
             "title": self.title,
             "description": self.description,
             "technologies": self.technologies,
+            "project_url": self.project_url,
         }
 
 
@@ -173,6 +176,10 @@ class Certification(db.Model):
     name = db.Column(db.String(255), nullable=False)
     issuer = db.Column(db.String(255), nullable=True)
     issue_date = db.Column(db.Date, nullable=True)
+    certificate_original_filename = db.Column(db.String(255), nullable=True)
+    certificate_stored_filename = db.Column(db.String(255), nullable=True)
+    certificate_content_type = db.Column(db.String(100), nullable=True)
+    certificate_uploaded_at = db.Column(db.DateTime, nullable=True)
 
     # Relationships
     profile = db.relationship("StudentProfile", back_populates="certifications")
@@ -187,6 +194,16 @@ class Certification(db.Model):
             "name": self.name,
             "issuer": self.issuer,
             "issue_date": self.issue_date.isoformat() if self.issue_date else None,
+            "certificate_original_filename": self.certificate_original_filename,
+            "certificate_content_type": self.certificate_content_type,
+            "certificate_uploaded_at": (
+                self.certificate_uploaded_at.isoformat()
+                if self.certificate_uploaded_at else None
+            ),
+            "certificate_url": (
+                f"/profile/certifications/{self.id}/certificate"
+                if self.certificate_stored_filename else None
+            ),
         }
 
 
@@ -242,6 +259,7 @@ class JobRole(db.Model):
     required_skills_json = db.Column(db.Text, nullable=True)
     job_vector_json = db.Column(db.Text, nullable=True)
     cgpa_threshold = db.Column(db.Float, nullable=True, default=0.0)
+    minimum_graduation_year = db.Column(db.Integer, nullable=True)
     academic_status = db.Column(db.String(50), nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
@@ -268,6 +286,7 @@ class JobRole(db.Model):
             "required_skills_json": self.required_skills_json,
             "job_vector_json": self.job_vector_json,
             "cgpa_threshold": self.cgpa_threshold,
+            "minimum_graduation_year": self.minimum_graduation_year,
             "academic_status": self.academic_status,
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -459,6 +478,7 @@ class Shortlist(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     profile_id = db.Column(db.Integer, db.ForeignKey("student_profile.id"), nullable=False)
     job_role_id = db.Column(db.Integer, db.ForeignKey("job_role.id"), nullable=False)
+    shortlist_name = db.Column(db.String(150), nullable=True)
     compatibility_score = db.Column(db.Float, nullable=True)
     status = db.Column(db.String(30), nullable=False, default="pending")
     shortlisted_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
@@ -479,6 +499,7 @@ class Shortlist(db.Model):
             "id": self.id,
             "profile_id": self.profile_id,
             "job_role_id": self.job_role_id,
+            "shortlist_name": self.shortlist_name,
             "compatibility_score": self.compatibility_score,
             "status": self.status,
             "shortlisted_at": self.shortlisted_at.isoformat() if self.shortlisted_at else None,
@@ -654,6 +675,8 @@ class ResumeUpload(db.Model):
     stored_filename = db.Column(db.String(255), nullable=False)
     content_type = db.Column(db.String(100), nullable=False)
     uploaded_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    resume_variant = db.Column(db.String(20), nullable=False, default="no_photo")
+    source = db.Column(db.String(20), nullable=False, default="uploaded")
 
     profile = db.relationship("StudentProfile", back_populates="resume_uploads")
 
@@ -668,6 +691,9 @@ class ResumeUpload(db.Model):
             "stored_filename": self.stored_filename,
             "content_type": self.content_type,
             "uploaded_at": self.uploaded_at.isoformat() if self.uploaded_at else None,
+            "resume_variant": self.resume_variant,
+            "source": self.source,
+            "download_url": f"/resume/uploads/{self.id}/download",
         }
 
 

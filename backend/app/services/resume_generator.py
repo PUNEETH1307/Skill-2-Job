@@ -615,7 +615,7 @@ class ResumeGenerator:
     # ------------------------------------------------------------------
     # Template 5: EXECUTIVE (purple banner + photo)
     # ------------------------------------------------------------------
-    def _build_executive(self, pd, profile, pal, ai):
+    def _build_executive_legacy(self, pd, profile, pal, ai):
         from reportlab.platypus import FrameBreak
         buf = BytesIO()
         P = colors.HexColor(pal["p"]); A = colors.HexColor(pal["a"])
@@ -674,7 +674,7 @@ class ResumeGenerator:
     # ------------------------------------------------------------------
     # Template 6: PHOTO_CARD (red card header + photo)
     # ------------------------------------------------------------------
-    def _build_photo_card(self, pd, profile, pal, ai):
+    def _build_photo_card_legacy(self, pd, profile, pal, ai):
         buf = BytesIO()
         P = colors.HexColor(pal["p"]); A = colors.HexColor(pal["a"])
         WHITE = colors.white

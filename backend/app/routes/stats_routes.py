@@ -58,9 +58,30 @@ def get_stats():
     avg_pkg = avg_pkg_q.scalar()
     max_pkg = max_pkg_q.scalar()
 
-    # ── 2. Yearly trend (2021-current year) ──────────────────────────
+    # ── 2. Yearly trend (available years through current year) ────────
+    # Keep the historical 2021 baseline, but include years outside it when
+    # profiles or placement records contain them.
+    graduation_years = [
+        year for (year,) in db.session.query(StudentProfile.graduation_year)
+        .filter(StudentProfile.graduation_year.isnot(None))
+        .distinct()
+        .all()
+    ]
+    placement_dates = [
+        placement_date for (placement_date,) in db.session.query(
+            PlacementRecord.placement_date
+        )
+        .filter(PlacementRecord.placement_date.isnot(None))
+        .distinct()
+        .all()
+    ]
+    placement_years = [placement_date.year for placement_date in placement_dates]
+    available_years = graduation_years + placement_years
+    first_year = min([2021, *available_years])
+    last_year = max([date.today().year, *available_years])
+
     yearly = []
-    for yr in range(2021, date.today().year + 1):
+    for yr in range(first_year, last_year + 1):
         cnt = db.session.query(func.count(PlacementRecord.id)).filter(
             func.year(PlacementRecord.placement_date) == yr
         ).scalar() or 0
